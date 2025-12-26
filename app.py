@@ -28,7 +28,7 @@ def set_background(image_path):
         }}
 
         .block-container {{
-            background: rgba(25, 25, 25, 0.0);
+            background: rgba(0.0, 0.0, 0.0, 0.0);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             padding: 2rem;
