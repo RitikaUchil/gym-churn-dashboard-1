@@ -36,67 +36,33 @@ def set_background(image_path):
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
         }}
 
-        /* Metric text with gradient effect */
-        #total_members div[data-testid="stMetric"] > div:first-child {{
-            background: linear-gradient(90deg, #1f77b4, #00bfff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 32px;
-            font-weight: bold;
-        }}
-        #total_members div[data-testid="stMetric"] > div:last-child {{
-            color: #1f77b4;
-            font-size: 16px;
-        }}
-
-        #high_risk div[data-testid="stMetric"] > div:first-child {{
-            background: linear-gradient(90deg, #d62728, #ff4c4c);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 32px;
-            font-weight: bold;
-        }}
-        #high_risk div[data-testid="stMetric"] > div:last-child {{
-            color: #d62728;
-            font-size: 16px;
-        }}
-
-        #avg_visits div[data-testid="stMetric"] > div:first-child {{
-            background: linear-gradient(90deg, #2ca02c, #7fff00);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 32px;
-            font-weight: bold;
-        }}
-        #avg_visits div[data-testid="stMetric"] > div:last-child {{
-            color: #2ca02c;
-            font-size: 16px;
-        }}
-
+        /* Metric numbers - gradient optional or black */
+        #total_members div[data-testid="stMetric"] > div:first-child,
+        #high_risk div[data-testid="stMetric"] > div:first-child,
+        #avg_visits div[data-testid="stMetric"] > div:first-child,
         #avg_payment div[data-testid="stMetric"] > div:first-child {{
-            background: linear-gradient(90deg, #ff7f0e, #ffd700);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #ffffff;  /* white number on black background */
             font-size: 32px;
             font-weight: bold;
         }}
+
+        /* Metric captions */
+        #total_members div[data-testid="stMetric"] > div:last-child,
+        #high_risk div[data-testid="stMetric"] > div:last-child,
+        #avg_visits div[data-testid="stMetric"] > div:last-child,
         #avg_payment div[data-testid="stMetric"] > div:last-child {{
-            color: #ff7f0e;
+            color: #ffffff;
             font-size: 16px;
         }}
 
-        /* Info message glow */
+        /* Info message with black background */
         div[data-testid="stInfo"] {{
-            color: #ff7f0e !important;
+            background-color: rgba(0,0,0,0.8) !important;
+            color: #ffffff !important;
             font-size: 18px !important;
             font-weight: bold !important;
-            text-shadow: 0 0 8px #ff7f0e, 0 0 16px #ff7f0e;
-            animation: glow 1.5s infinite alternate;
-        }}
-
-        @keyframes glow {{
-            from {{ text-shadow: 0 0 8px #ff7f0e, 0 0 16px #ff7f0e; }}
-            to {{ text-shadow: 0 0 12px #ffae42, 0 0 20px #ffae42; }}
+            padding: 10px;
+            border-radius: 8px;
         }}
         </style>
         """,
@@ -202,27 +168,27 @@ if members_file and attendance_file:
     data['RiskLevel'] = data['ChurnProbability'].apply(risk_level)
 
     # --------------------------
-    # 7. Summary Metrics with Colored/Gradient Text
+    # 7. Summary Metrics with Black Background
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
-        st.markdown('<div id="total_members">', unsafe_allow_html=True)
+        st.markdown('<div style="background-color: rgba(0,0,0,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
         st.metric("Total Members", len(data))
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c2:
-        st.markdown('<div id="high_risk">', unsafe_allow_html=True)
+        st.markdown('<div style="background-color: rgba(0,0,0,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
         st.metric("High Risk Members", len(data[data['RiskLevel'] == "High"]))
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c3:
-        st.markdown('<div id="avg_visits">', unsafe_allow_html=True)
+        st.markdown('<div style="background-color: rgba(0,0,0,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
         st.metric("Avg Visits / Week", round(data['AvgVisitsPerWeek'].mean(), 2))
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c4:
-        st.markdown('<div id="avg_payment">', unsafe_allow_html=True)
+        st.markdown('<div style="background-color: rgba(0,0,0,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
         st.metric("Avg Payment Ratio", round(data['PaymentRatio'].mean(), 2))
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -256,4 +222,9 @@ if members_file and attendance_file:
     st.pyplot(fig2)
 
 else:
+    st.markdown(
+        '<div style="background-color: rgba(0,0,0,0.8); padding:10px; border-radius:10px;">',
+        unsafe_allow_html=True
+    )
     st.info("Please upload both Members and Attendance Excel files to view the dashboard.")
+    st.markdown('</div>', unsafe_allow_html=True)
