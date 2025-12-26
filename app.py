@@ -35,6 +35,16 @@ def set_background(image_path):
             border-radius: 18px;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
         }}
+
+        /* Metric text color */
+        div[data-testid="stMetric"] > div:first-child {{
+            color: #000000;  /* number color */
+            font-size: 32px;
+        }}
+        div[data-testid="stMetric"] > div:last-child {{
+            color: #333333;  /* caption color */
+            font-size: 16px;
+        }}
         </style>
         """,
         unsafe_allow_html=True
@@ -139,13 +149,29 @@ if members_file and attendance_file:
     data['RiskLevel'] = data['ChurnProbability'].apply(risk_level)
 
     # --------------------------
-    # 7. Summary Metrics
+    # 7. Summary Metrics with Box Background
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Members", len(data))
-    c2.metric("High Risk Members", len(data[data['RiskLevel'] == "High"]))
-    c3.metric("Avg Visits / Week", round(data['AvgVisitsPerWeek'].mean(), 2))
-    c4.metric("Avg Payment Ratio", round(data['PaymentRatio'].mean(), 2))
+
+    with c1:
+        st.markdown('<div style="background-color: rgba(255,255,255,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
+        st.metric("Total Members", len(data))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c2:
+        st.markdown('<div style="background-color: rgba(255,255,255,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
+        st.metric("High Risk Members", len(data[data['RiskLevel'] == "High"]))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c3:
+        st.markdown('<div style="background-color: rgba(255,255,255,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
+        st.metric("Avg Visits / Week", round(data['AvgVisitsPerWeek'].mean(), 2))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c4:
+        st.markdown('<div style="background-color: rgba(255,255,255,0.8); padding:10px; border-radius:10px;">', unsafe_allow_html=True)
+        st.metric("Avg Payment Ratio", round(data['PaymentRatio'].mean(), 2))
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
