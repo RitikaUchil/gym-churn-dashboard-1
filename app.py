@@ -84,6 +84,20 @@ def set_background(image_path):
             color: #ff7f0e;
             font-size: 16px;
         }}
+
+        /* Info message glow */
+        div[data-testid="stInfo"] {{
+            color: #ff7f0e !important;
+            font-size: 18px !important;
+            font-weight: bold !important;
+            text-shadow: 0 0 8px #ff7f0e, 0 0 16px #ff7f0e;
+            animation: glow 1.5s infinite alternate;
+        }}
+
+        @keyframes glow {{
+            from {{ text-shadow: 0 0 8px #ff7f0e, 0 0 16px #ff7f0e; }}
+            to {{ text-shadow: 0 0 12px #ffae42, 0 0 20px #ffae42; }}
+        }}
         </style>
         """,
         unsafe_allow_html=True
