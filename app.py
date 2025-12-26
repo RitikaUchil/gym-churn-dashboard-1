@@ -9,6 +9,36 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestClassifier
 
+import base64
+import streamlit as st
+
+def set_background(image_path):
+    with open(image_path, "rb") as img:
+        encoded = base64.b64encode(img.read()).decode()
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("data:image/jpg;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }}
+
+        .block-container {{
+            background-color: rgba(255, 255, 255, 0.88);
+            padding: 2rem;
+            border-radius: 16px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+set_background("assets/bg.jpg")
+
+
 st.set_page_config(layout="wide", page_title="Gym Owner Dashboard")
 st.title("🏋️ Gym Owner Dashboard")
 
