@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (FINAL with Gradient KPI Circles)
+# Gym Owner Dashboard - Streamlit (FINAL WITH GRADIENT KPIs)
 # --------------------------
 
 import pandas as pd
@@ -11,12 +11,15 @@ import base64
 import re
 
 # --------------------------
-# Page Config (must be first)
+# Page Config (MUST be first)
 # --------------------------
-st.set_page_config(layout="wide", page_title="Gym Owner Dashboard")
+st.set_page_config(
+    layout="wide",
+    page_title="Gym Owner Dashboard"
+)
 
 # --------------------------
-# Background Image + Glass UI + KPI CSS
+# Background + Glass UI + KPI CSS
 # --------------------------
 def set_background(image_path):
     with open(image_path, "rb") as img:
@@ -25,6 +28,7 @@ def set_background(image_path):
     st.markdown(
         f"""
         <style>
+
         .stApp {{
             background-image: url("data:image/jpg;base64,{encoded}");
             background-size: cover;
@@ -40,18 +44,25 @@ def set_background(image_path):
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
         }}
 
-        /* KPI Circle Cards */
+        /* KPI Wrapper */
+        .kpi-wrapper {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 220px;
+        }}
+
+        /* KPI Circle */
         .kpi-circle {{
-            width: 170px;
-            height: 170px;
+            width: 160px;
+            height: 160px;
             border-radius: 50%;
             background: linear-gradient(135deg, #00c6ff, #0072ff);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-            margin: auto;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.45);
         }}
 
         .kpi-circle.orange {{
@@ -67,23 +78,25 @@ def set_background(image_path):
         }}
 
         .kpi-value {{
-            font-size: 42px;
+            font-size: 40px;
             font-weight: 800;
             color: #ffffff;
         }}
 
         .kpi-label {{
-            font-size: 15px;
+            font-size: 14px;
             color: #ffffff;
             margin-top: 6px;
             text-align: center;
             opacity: 0.95;
         }}
+
         </style>
         """,
         unsafe_allow_html=True
     )
 
+# ⚠️ IMPORTANT: make sure this image exists
 set_background("assets/bg.jpg")
 
 # --------------------------
@@ -98,6 +111,7 @@ members_file = st.file_uploader("Upload Members Excel", type=["xlsx"])
 attendance_file = st.file_uploader("Upload Attendance Excel", type=["xlsx"])
 
 if members_file and attendance_file:
+
     members = pd.read_excel(members_file)
     attendance = pd.read_excel(attendance_file)
 
@@ -167,12 +181,7 @@ if members_file and attendance_file:
 
     def is_session_based(plan):
         text = normalize(plan)
-        for kw in SESSION_KEYWORDS:
-            if kw in text:
-                return True
-        if re.search(r"\b\d+\s*s\b", text):
-            return True
-        return False
+        return any(k in text for k in SESSION_KEYWORDS)
 
     def extract_sessions(plan):
         match = re.search(r"(\d+)", normalize(plan))
@@ -184,7 +193,6 @@ if members_file and attendance_file:
         return "NON_PT"
 
     data['PT_Plan_Type'] = data['PlanName'].apply(classify_pt)
-
     data['EntitledSessions'] = np.where(
         data['PT_Plan_Type'] == "PT_SESSION_BASED",
         data['PlanName'].apply(extract_sessions),
@@ -229,7 +237,7 @@ if members_file and attendance_file:
     data['RiskLevel'] = data.apply(smart_risk, axis=1)
 
     # --------------------------
-    # 🔥 KPI METRICS (GRADIENT CIRCLES)
+    # 🔵 GRADIENT KPI SECTION
     # --------------------------
     st.markdown("### 📊 Key Performance Indicators")
 
@@ -237,51 +245,60 @@ if members_file and attendance_file:
 
     with c1:
         st.markdown(f"""
-        <div class="kpi-circle">
-            <div class="kpi-value">{len(data)}</div>
-            <div class="kpi-label">Total Members</div>
+        <div class="kpi-wrapper">
+            <div class="kpi-circle">
+                <div class="kpi-value">{len(data)}</div>
+                <div class="kpi-label">Total Members</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with c2:
         st.markdown(f"""
-        <div class="kpi-circle orange">
-            <div class="kpi-value">{len(data[data['RiskLevel'] == "High"])}</div>
-            <div class="kpi-label">High Risk Members</div>
+        <div class="kpi-wrapper">
+            <div class="kpi-circle orange">
+                <div class="kpi-value">{len(data[data['RiskLevel']=="High"])}</div>
+                <div class="kpi-label">High Risk</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with c3:
         st.markdown(f"""
-        <div class="kpi-circle green">
-            <div class="kpi-value">{round(data['AvgVisitsPerWeek'].mean(), 2)}</div>
-            <div class="kpi-label">Avg Visits / Week</div>
+        <div class="kpi-wrapper">
+            <div class="kpi-circle green">
+                <div class="kpi-value">{round(data['AvgVisitsPerWeek'].mean(),2)}</div>
+                <div class="kpi-label">Avg Visits / Week</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with c4:
         st.markdown(f"""
-        <div class="kpi-circle purple">
-            <div class="kpi-value">{round(data['PaymentRatio'].mean(), 2)}</div>
-            <div class="kpi-label">Avg Payment Ratio</div>
+        <div class="kpi-wrapper">
+            <div class="kpi-circle purple">
+                <div class="kpi-value">{round(data['PaymentRatio'].mean(),2)}</div>
+                <div class="kpi-label">Payment Ratio</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     # --------------------------
     # Member Table
     # --------------------------
-    st.subheader("Member Overview")
+    st.subheader("👥 Member Overview")
+
     st.dataframe(data[
-        ['PhoneNumber', 'PlanName', 'PT_Plan_Type',
-         'TotalVisits', 'AvgVisitsPerWeek',
-         'EntitledSessions', 'SessionUtilization',
-         'PaymentRatio', 'Churn', 'RiskLevel']
+        ['PhoneNumber','PlanName','PT_Plan_Type',
+         'TotalVisits','AvgVisitsPerWeek',
+         'EntitledSessions','SessionUtilization',
+         'PaymentRatio','Churn','RiskLevel']
     ])
 
     # --------------------------
-    # Visualizations
+    # Visualization
     # --------------------------
-    st.subheader("Risk Distribution")
+    st.subheader("📉 Risk Distribution")
     fig, ax = plt.subplots()
     sns.countplot(x=data['RiskLevel'], ax=ax)
     st.pyplot(fig)
