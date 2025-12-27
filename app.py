@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Pro Upgrade with Alerts)
+# Gym Owner Dashboard - Streamlit (Pro Upgrade)
 # --------------------------
 
 import pandas as pd
@@ -34,6 +34,7 @@ def set_background(image_path):
         }}
 
         .block-container {{
+            background: rgba(0,0,0,0.5);
             background: linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.7));
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -137,7 +138,7 @@ if members_file and attendance_file:
     attendance_agg['AvgVisitsPerWeek'] = attendance_agg['TotalVisits'] / attendance_agg['MembershipWeeks']
 
     # --------------------------
-    # Merge Data
+    # Merge
     # --------------------------
     data = members.merge(
         attendance_agg[['PhoneNumber', 'TotalVisits', 'AvgVisitsPerWeek']],
@@ -178,17 +179,11 @@ if members_file and attendance_file:
     # --------------------------
     # Metrics
     # --------------------------
-    # Add two extra metrics: Membership Expiry & Payment Defaulters
-    expiring = filtered_data[(filtered_data['EndDate'] - today).dt.days <= 7]
-    defaulters = filtered_data[filtered_data['PaymentRatio'] < 0.5]
-
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1, c2, c3, c4 = st.columns(4)
     c1.markdown(f'<div class="metric-card"><h1>🏋️ {len(filtered_data)}</h1><p>Total Members</p></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="metric-card"><h1>⚠️ {len(filtered_data[filtered_data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="metric-card"><h1>📊 {round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="metric-card"><h1>💰 {round(filtered_data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>', unsafe_allow_html=True)
-    c5.markdown(f'<div class="metric-card"><h1>⏳ {len(expiring)}</h1><p>Expiring Soon</p></div>', unsafe_allow_html=True)
-    c6.markdown(f'<div class="metric-card"><h1>💸 {len(defaulters)}</h1><p>Defaulters</p></div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
