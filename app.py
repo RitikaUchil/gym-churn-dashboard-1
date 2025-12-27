@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro with Insights & Excel Export)
+# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro with ML Insights & Excel Export)
 # --------------------------
 
 import pandas as pd
@@ -8,6 +8,11 @@ import streamlit as st
 import base64
 import plotly.express as px
 import io
+
+# ML Libraries
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
 
 # --------------------------
 # Page Config
@@ -75,7 +80,7 @@ set_background("assets/bg.jpg")
 # --------------------------
 # Title
 # --------------------------
-st.title("🏋️ Gym Owner Retention Dashboard with Insights")
+st.title("🏋️ Gym Owner Retention Dashboard with ML Insights")
 
 # --------------------------
 # File Upload
@@ -132,12 +137,11 @@ if members_file and attendance_file:
     )
 
     data = members.merge(attendance_agg, on="PhoneNumber", how="left").fillna(0)
-
     data["MembershipWeeks"] = ((pd.Timestamp.today() - data["StartDate"]).dt.days / 7).clip(lower=1)
     data["AvgVisitsPerWeek"] = (data["TotalVisits"] / data["MembershipWeeks"])
 
     # --------------------------
-    # Churn + Risk
+    # ML-Based Churn Prediction
     # --------------------------
     today = pd.Timestamp.today()
     data["Churn"] = np.where(
@@ -146,11 +150,29 @@ if members_file and attendance_file:
         0,
     )
 
-    data["RiskLevel"] = np.where(
-        data["Churn"] == 1,
-        "High",
-        np.where(data["AvgVisitsPerWeek"] < 1.5, "Medium", "Low"),
-    )
+    # Features for ML model
+    features = ['MembershipWeeks', 'AvgVisitsPerWeek', 'PaymentRatio', 'PlanName', 'PlanStatus']
+    X = pd.get_dummies(data[features], drop_first=True)
+    y = data['Churn']
+
+    # Split & Train Random Forest
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+
+    # Predict churn probability
+    data["ChurnProbability"] = model.predict_proba(pd.get_dummies(data[features], drop_first=True))[:,1]
+
+    # Define RiskLevel based on ML probability
+    def risk_from_prob(p):
+        if p > 0.7:
+            return "High"
+        elif p > 0.4:
+            return "Medium"
+        return "Low"
+
+    data["RiskLevel"] = data["ChurnProbability"].apply(risk_from_prob)
+    data["RetentionProbability"] = 1 - data["ChurnProbability"]
 
     # --------------------------
     # Remedies + Coupons
@@ -169,16 +191,8 @@ if members_file and attendance_file:
             return "10% Discount"
         return "Referral Coupon"
 
-    def retention_prob(row):
-        if row["RiskLevel"] == "High":
-            return 0.30
-        elif row["RiskLevel"] == "Medium":
-            return 0.55
-        return 0.85
-
     data["RecommendedAction"] = data.apply(action, axis=1)
     data["CouponOffer"] = data.apply(coupon, axis=1)
-    data["RetentionProbability"] = data.apply(retention_prob, axis=1)
 
     # --------------------------
     # Filters
