@@ -6,7 +6,9 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import base64
-import plotly.express as px
+import matplotlib.pyplot as plt
+
+plt.style.use("dark_background")
 
 # --------------------------
 # Page Config
@@ -52,7 +54,6 @@ def set_background(image_path):
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-size: 36px;
-        margin-bottom: 0;
     }}
 
     .metric-card p {{
@@ -70,7 +71,7 @@ set_background("assets/bg.jpg")
 st.title("🏋️ Gym Owner Retention Dashboard")
 
 # --------------------------
-# File Upload
+# Upload Files
 # --------------------------
 members_file = st.file_uploader("Upload Members Excel", type=["xlsx"])
 attendance_file = st.file_uploader("Upload Attendance Excel", type=["xlsx"])
@@ -95,7 +96,6 @@ if members_file and attendance_file:
 
     members['StartDate'] = pd.to_datetime(members['StartDate'], errors='coerce')
     members['EndDate'] = pd.to_datetime(members['EndDate'], errors='coerce')
-
     members['PaymentRatio'] = (members['ReceivedAmount'] / members['NetAmount']).fillna(0)
 
     # --------------------------
@@ -108,11 +108,8 @@ if members_file and attendance_file:
 
     attendance['CheckinTime'] = pd.to_datetime(attendance['CheckinTime'], errors='coerce')
 
-    attendance_agg = attendance.groupby('PhoneNumber').agg(
-        TotalVisits=('CheckinTime', 'count')
-    ).reset_index()
-
-    data = members.merge(attendance_agg, on='PhoneNumber', how='left').fillna(0)
+    visits = attendance.groupby('PhoneNumber').size().reset_index(name="TotalVisits")
+    data = members.merge(visits, on='PhoneNumber', how='left').fillna(0)
 
     data['MembershipWeeks'] = ((pd.Timestamp.today() - data['StartDate']).dt.days / 7).clip(lower=1)
     data['AvgVisitsPerWeek'] = data['TotalVisits'] / data['MembershipWeeks']
@@ -121,10 +118,8 @@ if members_file and attendance_file:
     # Churn + Risk
     # --------------------------
     today = pd.Timestamp.today()
-
     data['Churn'] = np.where(
-        (data['EndDate'] < today) & (data['PlanStatus'].str.lower() != 'active'),
-        1, 0
+        (data['EndDate'] < today) & (data['PlanStatus'].str.lower() != 'active'), 1, 0
     )
 
     data['RiskLevel'] = np.where(
@@ -135,32 +130,30 @@ if members_file and attendance_file:
     # --------------------------
     # Remedies + Coupons
     # --------------------------
-    def action(row):
-        if row['RiskLevel'] == 'High':
-            return "Personal call + Free PT"
-        elif row['RiskLevel'] == 'Medium':
-            return "WhatsApp reminder + Free class"
-        return "Maintain engagement"
+    data['RecommendedAction'] = data['RiskLevel'].map({
+        "High": "Personal call + Free PT",
+        "Medium": "WhatsApp reminder + Free class",
+        "Low": "Maintain engagement"
+    })
 
-    def coupon(row):
-        if row['RiskLevel'] == 'High':
-            return "20% Renewal Discount"
-        elif row['RiskLevel'] == 'Medium':
-            return "10% Discount"
-        return "Referral Coupon"
+    data['CouponOffer'] = data['RiskLevel'].map({
+        "High": "20% Renewal Discount",
+        "Medium": "10% Discount",
+        "Low": "Referral Coupon"
+    })
 
-    def retention_prob(row):
-        return 0.30 if row['RiskLevel']=="High" else 0.55 if row['RiskLevel']=="Medium" else 0.85
-
-    data['RecommendedAction'] = data.apply(action, axis=1)
-    data['CouponOffer'] = data.apply(coupon, axis=1)
-    data['RetentionProbability'] = data.apply(retention_prob, axis=1)
+    data['RetentionProbability'] = data['RiskLevel'].map({
+        "High": 0.30,
+        "Medium": 0.55,
+        "Low": 0.85
+    })
 
     # --------------------------
     # Filters
     # --------------------------
     st.sidebar.header("Filters")
-    risk_filter = st.sidebar.multiselect("Risk Level",
+    risk_filter = st.sidebar.multiselect(
+        "Risk Level",
         data['RiskLevel'].unique(),
         default=data['RiskLevel'].unique()
     )
@@ -168,66 +161,65 @@ if members_file and attendance_file:
     filtered_data = data[data['RiskLevel'].isin(risk_filter)]
 
     # --------------------------
-    # Gradient Metrics (UNCHANGED)
+    # Gradient Metrics
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
 
     c1.markdown(f"""<div class="metric-card"><h1>{len(filtered_data)}</h1><p>Total Members</p></div>""",
                 unsafe_allow_html=True)
-
     c2.markdown(f"""<div class="metric-card"><h1>{len(filtered_data[filtered_data['RiskLevel']=="High"])}</h1><p>High Risk</p></div>""",
                 unsafe_allow_html=True)
-
     c3.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['AvgVisitsPerWeek'].mean(),2)}</h1><p>Avg Visits / Week</p></div>""",
                 unsafe_allow_html=True)
-
     c4.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['PaymentRatio'].mean(),2)}</h1><p>Payment Ratio</p></div>""",
                 unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # --------------------------
-    # ORIGINAL CHARTS (RESTORED)
-    # --------------------------
+    # ==========================
+    # 📊 CLEAN & EASY PYPLOT GRAPHS
+    # ==========================
+
+    # Risk Distribution (Donut)
     st.subheader("Risk Distribution")
-    st.plotly_chart(
-        px.bar(filtered_data, x='RiskLevel', color='RiskLevel',
-               template="plotly_dark"), use_container_width=True)
+    fig, ax = plt.subplots()
+    counts = filtered_data['RiskLevel'].value_counts()
+    ax.pie(counts, labels=counts.index, autopct='%1.0f%%', startangle=90,
+           wedgeprops={'width': 0.45})
+    ax.axis('equal')
+    st.pyplot(fig)
 
-    st.subheader("Avg Visits Per Week")
-    st.plotly_chart(
-        px.histogram(filtered_data, x='AvgVisitsPerWeek',
-                     template="plotly_dark"), use_container_width=True)
+    # Avg Visits (Box Plot)
+    st.subheader("Engagement Distribution")
+    fig, ax = plt.subplots()
+    filtered_data.boxplot(column='AvgVisitsPerWeek', by='RiskLevel', ax=ax)
+    ax.set_title("Avg Visits per Week by Risk Level")
+    ax.set_ylabel("Visits / Week")
+    plt.suptitle("")
+    st.pyplot(fig)
 
-    st.subheader("Payment Ratio")
-    st.plotly_chart(
-        px.histogram(filtered_data, x='PaymentRatio',
-                     template="plotly_dark"), use_container_width=True)
+    # Payment Ratio (Violin)
+    st.subheader("Payment Behavior")
+    fig, ax = plt.subplots()
+    groups = [filtered_data[filtered_data['RiskLevel']==r]['PaymentRatio'] for r in ['High','Medium','Low']]
+    ax.violinplot(groups, showmeans=True)
+    ax.set_xticks([1,2,3])
+    ax.set_xticklabels(['High','Medium','Low'])
+    ax.set_ylabel("Payment Ratio")
+    st.pyplot(fig)
 
-    st.subheader("Churn by Plan")
-    st.plotly_chart(
-        px.bar(filtered_data, x='PlanName', y='Churn',
-               template="plotly_dark"), use_container_width=True)
+    # Before vs After Retention (Line)
+    st.subheader("📈 Retention Improvement")
+    before = filtered_data.groupby('RiskLevel')['Churn'].mean()
+    after = filtered_data.groupby('RiskLevel')['RetentionProbability'].mean()
 
-    # --------------------------
-    # BEFORE vs AFTER RETENTION (NEW)
-    # --------------------------
-    before = filtered_data.groupby('RiskLevel')['Churn'].mean().reset_index()
-    before['Retention'] = 1 - before['Churn']
-    before['Stage'] = "Before Action"
-
-    after = filtered_data.groupby('RiskLevel')['RetentionProbability'].mean().reset_index()
-    after.rename(columns={'RetentionProbability':'Retention'}, inplace=True)
-    after['Stage'] = "After Action"
-
-    compare = pd.concat([before[['RiskLevel','Retention','Stage']],
-                          after[['RiskLevel','Retention','Stage']]])
-
-    st.subheader("📊 Before vs After Retention Impact")
-    st.plotly_chart(
-        px.bar(compare, x='RiskLevel', y='Retention',
-               color='Stage', barmode='group',
-               template="plotly_dark"), use_container_width=True)
+    fig, ax = plt.subplots()
+    ax.plot(before.index, 1-before, marker='o', label="Before")
+    ax.plot(after.index, after, marker='o', label="After")
+    ax.set_ylabel("Retention Rate")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    st.pyplot(fig)
 
     # --------------------------
     # Action Table
