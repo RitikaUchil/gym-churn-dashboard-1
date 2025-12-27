@@ -110,9 +110,7 @@ if members_file and attendance_file:
 
     members["StartDate"] = pd.to_datetime(members["StartDate"], errors="coerce")
     members["EndDate"] = pd.to_datetime(members["EndDate"], errors="coerce")
-    members["PaymentRatio"] = (
-        members["ReceivedAmount"] / members["NetAmount"]
-    ).fillna(0)
+    members["PaymentRatio"] = (members["ReceivedAmount"] / members["NetAmount"]).fillna(0)
 
     # --------------------------
     # Attendance Processing
@@ -125,9 +123,7 @@ if members_file and attendance_file:
         inplace=True,
     )
 
-    attendance["CheckinTime"] = pd.to_datetime(
-        attendance["CheckinTime"], errors="coerce"
-    )
+    attendance["CheckinTime"] = pd.to_datetime(attendance["CheckinTime"], errors="coerce")
 
     attendance_agg = (
         attendance.groupby("PhoneNumber")
@@ -135,26 +131,17 @@ if members_file and attendance_file:
         .reset_index()
     )
 
-    data = members.merge(
-        attendance_agg, on="PhoneNumber", how="left"
-    ).fillna(0)
+    data = members.merge(attendance_agg, on="PhoneNumber", how="left").fillna(0)
 
-    data["MembershipWeeks"] = (
-        (pd.Timestamp.today() - data["StartDate"]).dt.days / 7
-    ).clip(lower=1)
-
-    data["AvgVisitsPerWeek"] = (
-        data["TotalVisits"] / data["MembershipWeeks"]
-    )
+    data["MembershipWeeks"] = ((pd.Timestamp.today() - data["StartDate"]).dt.days / 7).clip(lower=1)
+    data["AvgVisitsPerWeek"] = (data["TotalVisits"] / data["MembershipWeeks"])
 
     # --------------------------
     # Churn + Risk
     # --------------------------
     today = pd.Timestamp.today()
-
     data["Churn"] = np.where(
-        (data["EndDate"] < today)
-        & (data["PlanStatus"].str.lower() != "active"),
+        (data["EndDate"] < today) & (data["PlanStatus"].str.lower() != "active"),
         1,
         0,
     )
@@ -197,113 +184,82 @@ if members_file and attendance_file:
     # Filters
     # --------------------------
     st.sidebar.header("Filters")
-
     risk_filter = st.sidebar.multiselect(
         "Risk Level",
         data["RiskLevel"].unique(),
         default=data["RiskLevel"].unique(),
     )
-
     filtered_data = data[data["RiskLevel"].isin(risk_filter)]
 
     # --------------------------
     # Gradient Metrics
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
-
-    c1.markdown(
-        f"""
-        <div class="metric-card">
-            <h1>{len(filtered_data)}</h1>
-            <p>Total Members</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    c2.markdown(
-        f"""
-        <div class="metric-card">
-            <h1>{len(filtered_data[filtered_data["RiskLevel"] == "High"])}</h1>
-            <p>High Risk</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    c3.markdown(
-        f"""
-        <div class="metric-card">
-            <h1>{round(filtered_data["AvgVisitsPerWeek"].mean(), 2)}</h1>
-            <p>Avg Visits / Week</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    c4.markdown(
-        f"""
-        <div class="metric-card">
-            <h1>{round(filtered_data["PaymentRatio"].mean(), 2)}</h1>
-            <p>Payment Ratio</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    c1.markdown(f"""<div class="metric-card"><h1>{len(filtered_data)}</h1><p>Total Members</p></div>""", unsafe_allow_html=True)
+    c2.markdown(f"""<div class="metric-card"><h1>{len(filtered_data[filtered_data["RiskLevel"]=="High"])}</h1><p>High Risk</p></div>""", unsafe_allow_html=True)
+    c3.markdown(f"""<div class="metric-card"><h1>{round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>""", unsafe_allow_html=True)
+    c4.markdown(f"""<div class="metric-card"><h1>{round(filtered_data["PaymentRatio"].mean(),2)}</h1><p>Payment Ratio</p></div>""", unsafe_allow_html=True)
 
     st.markdown("---")
 
     # --------------------------
-    # Charts with Insights
+    # Risk Distribution → Donut + Insight
     # --------------------------
     st.subheader("Risk Distribution")
     risk_counts = filtered_data["RiskLevel"].value_counts().reset_index()
     risk_counts.columns = ["RiskLevel", "Count"]
-    fig_risk = px.pie(
-        risk_counts, names="RiskLevel", values="Count", hole=0.45, template="plotly_dark"
-    )
+    fig_risk = px.pie(risk_counts, names="RiskLevel", values="Count", hole=0.45, template="plotly_dark")
     st.plotly_chart(fig_risk, use_container_width=True)
-    high_pct = round(
-        (risk_counts[risk_counts["RiskLevel"] == "High"]["Count"].sum() / len(filtered_data)) * 100,
-        2,
-    )
+    high_pct = round((risk_counts[risk_counts["RiskLevel"]=="High"]["Count"].sum() / len(filtered_data))*100,2)
     st.markdown(f"**Insight:** {high_pct}% of members are at high risk. Focus retention efforts here first.")
 
+    # --------------------------
+    # Avg Visits → Box + Insight
+    # --------------------------
     st.subheader("Avg Visits Per Week (Engagement Spread)")
-    fig_visits = px.box(
-        filtered_data, x="RiskLevel", y="AvgVisitsPerWeek", color="RiskLevel", template="plotly_dark"
-    )
+    fig_visits = px.box(filtered_data, x="RiskLevel", y="AvgVisitsPerWeek", color="RiskLevel", template="plotly_dark")
     st.plotly_chart(fig_visits, use_container_width=True)
     avg_visits = round(filtered_data["AvgVisitsPerWeek"].mean(), 2)
     st.markdown(f"**Insight:** Average visits per week is {avg_visits}. Low engagement members are mostly in Medium/High risk groups.")
 
+    # --------------------------
+    # Payment Ratio → Violin + Insight
+    # --------------------------
     st.subheader("Payment Ratio Behavior")
-    fig_payment = px.violin(
-        filtered_data, x="RiskLevel", y="PaymentRatio", box=True, points="all", template="plotly_dark"
-    )
+    fig_payment = px.violin(filtered_data, x="RiskLevel", y="PaymentRatio", box=True, points="all", template="plotly_dark")
     st.plotly_chart(fig_payment, use_container_width=True)
     avg_payment = round(filtered_data["PaymentRatio"].mean(), 2)
     st.markdown(f"**Insight:** Overall payment ratio is {avg_payment}. Consider offering coupons or discounts to improve collection for Medium/High risk members.")
 
+    # --------------------------
+    # Churn by Plan → Bar with Color Intensity + Insight
+    # --------------------------
     st.subheader("Churn Intensity by Plan")
     plan_churn = filtered_data.groupby("PlanName")["Churn"].mean().reset_index()
-    fig_churn = px.density_heatmap(
-        plan_churn, x="PlanName", y=["Churn"], z="Churn", template="plotly_dark"
+    fig_churn = px.bar(
+        plan_churn,
+        x="PlanName",
+        y="Churn",
+        color="Churn",
+        color_continuous_scale="RdYlGn_r",
+        template="plotly_dark",
+        title="Churn Intensity by Plan"
     )
     st.plotly_chart(fig_churn, use_container_width=True)
     top_churn_plan = plan_churn.sort_values("Churn", ascending=False).iloc[0]["PlanName"]
     st.markdown(f"**Insight:** Plan '{top_churn_plan}' has the highest churn rate. Focus retention strategies on this plan.")
 
+    # --------------------------
+    # Before vs After Retention → Line + Insight
+    # --------------------------
     st.subheader("📈 Before vs After Retention Impact")
     before = filtered_data.groupby("RiskLevel")["Churn"].mean().reset_index()
     before["Retention"] = 1 - before["Churn"]
     before["Stage"] = "Before Action"
-
     after = filtered_data.groupby("RiskLevel")["RetentionProbability"].mean().reset_index()
-    after.rename(columns={"RetentionProbability": "Retention"}, inplace=True)
+    after.rename(columns={"RetentionProbability":"Retention"}, inplace=True)
     after["Stage"] = "After Action"
-
-    compare = pd.concat([before[["RiskLevel", "Retention", "Stage"]], after[["RiskLevel", "Retention", "Stage"]]])
+    compare = pd.concat([before[["RiskLevel","Retention","Stage"]], after[["RiskLevel","Retention","Stage"]]])
     fig_retention = px.line(compare, x="RiskLevel", y="Retention", color="Stage", markers=True, template="plotly_dark")
     st.plotly_chart(fig_retention, use_container_width=True)
     st.markdown("**Insight:** After recommended actions, retention probability improves across all risk levels, with the largest increase in High risk members.")
@@ -312,17 +268,9 @@ if members_file and attendance_file:
     # Action Table + Excel Export
     # --------------------------
     st.subheader("📋 Recovery Action Plan")
-    export_columns = [
-        "Name", "PhoneNumber", "RiskLevel", "RecommendedAction", "CouponOffer",
-        "RetentionProbability", "AvgVisitsPerWeek", "PaymentRatio"
-    ]
-
-    filtered_data["Name"] = filtered_data.get("Name", "N/A")
-
-    st.dataframe(
-        filtered_data[export_columns],
-        use_container_width=True,
-    )
+    export_columns = ["Name","PhoneNumber","RiskLevel","RecommendedAction","CouponOffer","RetentionProbability","AvgVisitsPerWeek","PaymentRatio"]
+    filtered_data["Name"] = filtered_data.get("Name","N/A")
+    st.dataframe(filtered_data[export_columns], use_container_width=True)
 
     excel_buffer = io.BytesIO()
     filtered_data[export_columns].to_excel(excel_buffer, index=False, sheet_name="RecoveryPlan")
