@@ -14,29 +14,53 @@ import plotly.express as px
 st.set_page_config(page_title="Gym Owner Dashboard", layout="wide")
 
 # --------------------------
-# Background Image + Glass UI
+# Background Image + Glass UI + Gradient Cards
 # --------------------------
 def set_background(image_path):
     with open(image_path, "rb") as img:
         encoded = base64.b64encode(img.read()).decode()
 
-    st.markdown(
-        f"""
-        <style>
-        .stApp {{
-            background-image: url("data:image/jpg;base64,{encoded}");
-            background-size: cover;
-        }}
-        .block-container {{
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-            border-radius: 16px;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown(f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{encoded}");
+        background-size: cover;
+    }}
+
+    .block-container {{
+        background: linear-gradient(to bottom right, rgba(0,0,0,0.55), rgba(0,0,0,0.75));
+        backdrop-filter: blur(12px);
+        padding: 2rem;
+        border-radius: 18px;
+    }}
+
+    .metric-card {{
+        background: rgba(0,0,0,0.85);
+        padding: 18px;
+        border-radius: 14px;
+        text-align: center;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+        transition: transform 0.2s;
+    }}
+
+    .metric-card:hover {{
+        transform: scale(1.05);
+    }}
+
+    .metric-card h1 {{
+        background: linear-gradient(to right, #00f5ff, #ff00f5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 36px;
+        margin-bottom: 0;
+    }}
+
+    .metric-card p {{
+        color: white;
+        font-size: 16px;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
 
 set_background("assets/bg.jpg")
 
@@ -46,7 +70,7 @@ set_background("assets/bg.jpg")
 st.title("🏋️ Gym Owner Retention Dashboard")
 
 # --------------------------
-# Upload Files
+# File Upload
 # --------------------------
 members_file = st.file_uploader("Upload Members Excel", type=["xlsx"])
 attendance_file = st.file_uploader("Upload Attendance Excel", type=["xlsx"])
@@ -57,7 +81,7 @@ if members_file and attendance_file:
     attendance = pd.read_excel(attendance_file)
 
     # --------------------------
-    # Members Preprocessing
+    # Members Processing
     # --------------------------
     members.rename(columns={
         'Number': 'PhoneNumber',
@@ -69,7 +93,6 @@ if members_file and attendance_file:
         'Received Amount': 'ReceivedAmount'
     }, inplace=True)
 
-    members['DOB'] = pd.to_datetime(members['DOB'], errors='coerce')
     members['StartDate'] = pd.to_datetime(members['StartDate'], errors='coerce')
     members['EndDate'] = pd.to_datetime(members['EndDate'], errors='coerce')
 
@@ -86,8 +109,7 @@ if members_file and attendance_file:
     attendance['CheckinTime'] = pd.to_datetime(attendance['CheckinTime'], errors='coerce')
 
     attendance_agg = attendance.groupby('PhoneNumber').agg(
-        TotalVisits=('CheckinTime', 'count'),
-        LastVisit=('CheckinTime', 'max')
+        TotalVisits=('CheckinTime', 'count')
     ).reset_index()
 
     data = members.merge(attendance_agg, on='PhoneNumber', how='left').fillna(0)
@@ -96,7 +118,7 @@ if members_file and attendance_file:
     data['AvgVisitsPerWeek'] = data['TotalVisits'] / data['MembershipWeeks']
 
     # --------------------------
-    # Churn + Risk Level
+    # Churn + Risk
     # --------------------------
     today = pd.Timestamp.today()
 
@@ -111,136 +133,112 @@ if members_file and attendance_file:
     )
 
     # --------------------------
-    # Remedy Recommendation
+    # Remedies + Coupons
     # --------------------------
-    def recommend_action(row):
+    def action(row):
         if row['RiskLevel'] == 'High':
-            if row['AvgVisitsPerWeek'] < 0.5:
-                return "Personal call + Free PT"
-            elif row['PaymentRatio'] < 0.7:
-                return "Payment follow-up + Flexible plan"
-            else:
-                return "Renewal discount offer"
+            return "Personal call + Free PT"
         elif row['RiskLevel'] == 'Medium':
             return "WhatsApp reminder + Free class"
-        else:
-            return "Maintain engagement"
+        return "Maintain engagement"
 
-    data['RecommendedAction'] = data.apply(recommend_action, axis=1)
-
-    # --------------------------
-    # Coupon Assignment
-    # --------------------------
-    def assign_coupon(row):
+    def coupon(row):
         if row['RiskLevel'] == 'High':
             return "20% Renewal Discount"
         elif row['RiskLevel'] == 'Medium':
-            return "10% Discount / Free Class"
-        else:
-            return "Referral Coupon"
+            return "10% Discount"
+        return "Referral Coupon"
 
-    data['CouponOffer'] = data.apply(assign_coupon, axis=1)
-
-    # --------------------------
-    # Coupon Expiry
-    # --------------------------
-    def coupon_expiry(row):
-        if row['RiskLevel'] == 'High':
-            return today + pd.Timedelta(days=7)
-        elif row['RiskLevel'] == 'Medium':
-            return today + pd.Timedelta(days=14)
-        else:
-            return today + pd.Timedelta(days=30)
-
-    data['CouponExpiry'] = data.apply(coupon_expiry, axis=1)
-
-    # --------------------------
-    # Retention Probability (AFTER Action)
-    # --------------------------
     def retention_prob(row):
-        if row['RiskLevel'] == 'High':
-            return 0.30
-        elif row['RiskLevel'] == 'Medium':
-            return 0.55
-        else:
-            return 0.85
+        return 0.30 if row['RiskLevel']=="High" else 0.55 if row['RiskLevel']=="Medium" else 0.85
 
+    data['RecommendedAction'] = data.apply(action, axis=1)
+    data['CouponOffer'] = data.apply(coupon, axis=1)
     data['RetentionProbability'] = data.apply(retention_prob, axis=1)
 
     # --------------------------
-    # BEFORE vs AFTER Retention
-    # --------------------------
-    before_retention = data.groupby('RiskLevel')['Churn'].mean().reset_index()
-    before_retention['RetentionRate'] = 1 - before_retention['Churn']
-    before_retention['Stage'] = 'Before Action'
-
-    after_retention = data.groupby('RiskLevel')['RetentionProbability'].mean().reset_index()
-    after_retention.rename(columns={'RetentionProbability': 'RetentionRate'}, inplace=True)
-    after_retention['Stage'] = 'After Action'
-
-    retention_compare = pd.concat([
-        before_retention[['RiskLevel','RetentionRate','Stage']],
-        after_retention[['RiskLevel','RetentionRate','Stage']]
-    ])
-
-    # --------------------------
-    # Sidebar Filters
+    # Filters
     # --------------------------
     st.sidebar.header("Filters")
-    risk_filter = st.sidebar.multiselect(
-        "Risk Level",
-        options=data['RiskLevel'].unique(),
+    risk_filter = st.sidebar.multiselect("Risk Level",
+        data['RiskLevel'].unique(),
         default=data['RiskLevel'].unique()
     )
 
     filtered_data = data[data['RiskLevel'].isin(risk_filter)]
 
     # --------------------------
-    # Metrics
+    # Gradient Metrics (UNCHANGED)
     # --------------------------
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Members", len(filtered_data))
-    c2.metric("High Risk Members", len(filtered_data[filtered_data['RiskLevel']=="High"]))
-    c3.metric("Avg Retention Probability",
-              f"{round(filtered_data['RetentionProbability'].mean()*100,1)}%")
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.markdown(f"""<div class="metric-card"><h1>{len(filtered_data)}</h1><p>Total Members</p></div>""",
+                unsafe_allow_html=True)
+
+    c2.markdown(f"""<div class="metric-card"><h1>{len(filtered_data[filtered_data['RiskLevel']=="High"])}</h1><p>High Risk</p></div>""",
+                unsafe_allow_html=True)
+
+    c3.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['AvgVisitsPerWeek'].mean(),2)}</h1><p>Avg Visits / Week</p></div>""",
+                unsafe_allow_html=True)
+
+    c4.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['PaymentRatio'].mean(),2)}</h1><p>Payment Ratio</p></div>""",
+                unsafe_allow_html=True)
 
     st.markdown("---")
 
     # --------------------------
-    # BEFORE vs AFTER Chart
+    # ORIGINAL CHARTS (RESTORED)
     # --------------------------
+    st.subheader("Risk Distribution")
+    st.plotly_chart(
+        px.bar(filtered_data, x='RiskLevel', color='RiskLevel',
+               template="plotly_dark"), use_container_width=True)
+
+    st.subheader("Avg Visits Per Week")
+    st.plotly_chart(
+        px.histogram(filtered_data, x='AvgVisitsPerWeek',
+                     template="plotly_dark"), use_container_width=True)
+
+    st.subheader("Payment Ratio")
+    st.plotly_chart(
+        px.histogram(filtered_data, x='PaymentRatio',
+                     template="plotly_dark"), use_container_width=True)
+
+    st.subheader("Churn by Plan")
+    st.plotly_chart(
+        px.bar(filtered_data, x='PlanName', y='Churn',
+               template="plotly_dark"), use_container_width=True)
+
+    # --------------------------
+    # BEFORE vs AFTER RETENTION (NEW)
+    # --------------------------
+    before = filtered_data.groupby('RiskLevel')['Churn'].mean().reset_index()
+    before['Retention'] = 1 - before['Churn']
+    before['Stage'] = "Before Action"
+
+    after = filtered_data.groupby('RiskLevel')['RetentionProbability'].mean().reset_index()
+    after.rename(columns={'RetentionProbability':'Retention'}, inplace=True)
+    after['Stage'] = "After Action"
+
+    compare = pd.concat([before[['RiskLevel','Retention','Stage']],
+                          after[['RiskLevel','Retention','Stage']]])
+
     st.subheader("📊 Before vs After Retention Impact")
-
-    fig_retention = px.bar(
-        retention_compare,
-        x='RiskLevel',
-        y='RetentionRate',
-        color='Stage',
-        barmode='group',
-        text_auto='.0%',
-        template="plotly_dark",
-        title="Retention Improvement After Remedies & Coupons"
-    )
-
-    fig_retention.update_layout(
-        yaxis_tickformat=".0%",
-        yaxis_title="Retention Rate",
-        xaxis_title=""
-    )
-
-    st.plotly_chart(fig_retention, use_container_width=True)
+    st.plotly_chart(
+        px.bar(compare, x='RiskLevel', y='Retention',
+               color='Stage', barmode='group',
+               template="plotly_dark"), use_container_width=True)
 
     # --------------------------
-    # Smart Action Table
+    # Action Table
     # --------------------------
-    st.subheader("📋 Member Recovery Action Plan")
-
+    st.subheader("📋 Recovery Action Plan")
     st.dataframe(
         filtered_data[['PhoneNumber','RiskLevel',
                        'RecommendedAction','CouponOffer',
-                       'CouponExpiry','RetentionProbability']],
+                       'RetentionProbability']],
         use_container_width=True
     )
 
 else:
-    st.info("Please upload Members & Attendance Excel files")
+    st.info("Please upload both files")
