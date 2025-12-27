@@ -31,11 +31,3 @@ A **Streamlit-based dashboard** for gym owners to track member engagement, predi
 ![Dashboard Screenshot](assets/Screenshoot.png)
 
 ---
-
-## 🔹 Installation
-
-1. Clone the repo:
-
-```bash
-git clone https://github.com/YourUsername/gym-churn-dashboard-1.git
-cd gym-churn-dashboard-1
