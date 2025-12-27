@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit
+# Gym Owner Dashboard - Streamlit (Upgraded)
 # --------------------------
 
 import pandas as pd
@@ -8,9 +8,10 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
 import base64
+import plotly.express as px
 
 # --------------------------
-# Page Config (MUST BE FIRST)
+# Page Config
 # --------------------------
 st.set_page_config(
     page_title="Gym Owner Dashboard",
@@ -35,7 +36,8 @@ def set_background(image_path):
         }}
 
         .block-container {{
-            background: rgba(0,0,0,0.55);
+            background: rgba(0,0,0,0.5);
+            background: linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.7));
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             padding: 2rem;
@@ -47,10 +49,18 @@ def set_background(image_path):
             padding: 16px;
             border-radius: 14px;
             text-align: center;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+            transition: transform 0.2s;
+        }}
+
+        .metric-card:hover {{
+            transform: scale(1.05);
         }}
 
         .metric-card h1 {{
-            color: #00f5ff;
+            background: linear-gradient(to right, #00f5ff, #ff00f5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             font-size: 36px;
             margin-bottom: 0;
         }}
@@ -161,46 +171,111 @@ if members_file and attendance_file:
     c1, c2, c3, c4 = st.columns(4)
 
     c1.markdown(
-        f'<div class="metric-card"><h1>{len(data)}</h1><p>Total Members</p></div>',
+        f'<div class="metric-card"><h1>🏋️ {len(data)}</h1><p>Total Members</p></div>',
         unsafe_allow_html=True
     )
 
     c2.markdown(
-        f'<div class="metric-card"><h1>{len(data[data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>',
+        f'<div class="metric-card"><h1>⚠️ {len(data[data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>',
         unsafe_allow_html=True
     )
 
     c3.markdown(
-        f'<div class="metric-card"><h1>{round(data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>',
+        f'<div class="metric-card"><h1>📊 {round(data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>',
         unsafe_allow_html=True
     )
 
     c4.markdown(
-        f'<div class="metric-card"><h1>{round(data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>',
+        f'<div class="metric-card"><h1>💰 {round(data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>',
         unsafe_allow_html=True
     )
 
     st.markdown("---")
 
     # --------------------------
-    # Table
+    # Table with Conditional Formatting
     # --------------------------
     st.subheader("Member Overview")
+    def highlight_risk(row):
+        color = ''
+        if row['RiskLevel'] == 'High':
+            color = 'background-color: #FF4C4C; color:white'
+        elif row['RiskLevel'] == 'Medium':
+            color = 'background-color: #FFA500; color:black'
+        else:
+            color = 'background-color: #32CD32; color:black'
+        return [color]*len(row)
+
     st.dataframe(
-        data[['PhoneNumber', 'PlanName', 'TotalVisits',
-              'AvgVisitsPerWeek', 'PaymentRatio', 'Churn', 'RiskLevel']]
+        data[['PhoneNumber','PlanName','TotalVisits','AvgVisitsPerWeek','PaymentRatio','Churn','RiskLevel']]
+        .style.apply(highlight_risk, axis=1)
     )
 
     # --------------------------
-    # Dark Charts (NO white bg)
+    # Interactive Plotly Charts
     # --------------------------
-    sns.set_style("dark")
 
-    st.subheader("Risk Distribution")
-    fig, ax = plt.subplots(facecolor='none')
-    sns.countplot(x=data['RiskLevel'], ax=ax)
-    ax.set_facecolor("none")
-    st.pyplot(fig)
+    # Risk Level Distribution
+    st.subheader("Risk Level Distribution")
+    risk_counts = data['RiskLevel'].value_counts().reset_index()
+    risk_counts.columns = ['RiskLevel', 'Count']
+    fig_risk = px.bar(
+        risk_counts,
+        x='RiskLevel',
+        y='Count',
+        color='RiskLevel',
+        color_discrete_map={'High':'#FF4C4C','Medium':'#FFA500','Low':'#32CD32'},
+        text='Count',
+        title="Risk Distribution",
+        template="plotly_dark"
+    )
+    fig_risk.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis_title="",
+        yaxis_title="Number of Members",
+        showlegend=False
+    )
+    st.plotly_chart(fig_risk, use_container_width=True)
+
+    # Avg Visits per Week Distribution
+    st.subheader("Avg Visits per Week Distribution")
+    fig_visits = px.histogram(
+        data,
+        x='AvgVisitsPerWeek',
+        nbins=15,
+        color_discrete_sequence=['#00f5ff'],
+        title="Avg Visits per Week",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_visits, use_container_width=True)
+
+    # Payment Ratio Distribution
+    st.subheader("Payment Ratio Distribution")
+    fig_payment = px.histogram(
+        data,
+        x='PaymentRatio',
+        nbins=10,
+        color_discrete_sequence=['#ff00f5'],
+        title="Payment Ratio",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_payment, use_container_width=True)
+
+    # Churn by Plan
+    st.subheader("Churn by Plan")
+    churn_plan = data.groupby('PlanName')['Churn'].sum().reset_index()
+    fig_churn = px.bar(
+        churn_plan,
+        x='PlanName',
+        y='Churn',
+        color='Churn',
+        text='Churn',
+        color_continuous_scale='Reds',
+        title="Churn by Plan",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_churn, use_container_width=True)
 
 else:
     st.info("Please upload both Members and Attendance Excel files")
