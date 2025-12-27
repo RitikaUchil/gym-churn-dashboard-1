@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (FINAL)
+# Gym Owner Dashboard - Streamlit (FINAL with Gradient KPI Circles)
 # --------------------------
 
 import pandas as pd
@@ -11,7 +11,12 @@ import base64
 import re
 
 # --------------------------
-# Background Image + Glass UI
+# Page Config (must be first)
+# --------------------------
+st.set_page_config(layout="wide", page_title="Gym Owner Dashboard")
+
+# --------------------------
+# Background Image + Glass UI + KPI CSS
 # --------------------------
 def set_background(image_path):
     with open(image_path, "rb") as img:
@@ -34,6 +39,46 @@ def set_background(image_path):
             border-radius: 18px;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
         }}
+
+        /* KPI Circle Cards */
+        .kpi-circle {{
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            margin: auto;
+        }}
+
+        .kpi-circle.orange {{
+            background: linear-gradient(135deg, #ff9a00, #ff4e00);
+        }}
+
+        .kpi-circle.green {{
+            background: linear-gradient(135deg, #00b09b, #96c93d);
+        }}
+
+        .kpi-circle.purple {{
+            background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+        }}
+
+        .kpi-value {{
+            font-size: 42px;
+            font-weight: 800;
+            color: #ffffff;
+        }}
+
+        .kpi-label {{
+            font-size: 15px;
+            color: #ffffff;
+            margin-top: 6px;
+            text-align: center;
+            opacity: 0.95;
+        }}
         </style>
         """,
         unsafe_allow_html=True
@@ -42,9 +87,8 @@ def set_background(image_path):
 set_background("assets/bg.jpg")
 
 # --------------------------
-# Page Config
+# Title
 # --------------------------
-st.set_page_config(layout="wide", page_title="Gym Owner Dashboard")
 st.title("🏋️ Gym Owner Dashboard")
 
 # --------------------------
@@ -140,6 +184,7 @@ if members_file and attendance_file:
         return "NON_PT"
 
     data['PT_Plan_Type'] = data['PlanName'].apply(classify_pt)
+
     data['EntitledSessions'] = np.where(
         data['PT_Plan_Type'] == "PT_SESSION_BASED",
         data['PlanName'].apply(extract_sessions),
@@ -184,13 +229,43 @@ if members_file and attendance_file:
     data['RiskLevel'] = data.apply(smart_risk, axis=1)
 
     # --------------------------
-    # Metrics
+    # 🔥 KPI METRICS (GRADIENT CIRCLES)
     # --------------------------
+    st.markdown("### 📊 Key Performance Indicators")
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Members", len(data))
-    c2.metric("High Risk Members", len(data[data['RiskLevel'] == "High"]))
-    c3.metric("Avg Visits / Week", round(data['AvgVisitsPerWeek'].mean(), 2))
-    c4.metric("Avg Payment Ratio", round(data['PaymentRatio'].mean(), 2))
+
+    with c1:
+        st.markdown(f"""
+        <div class="kpi-circle">
+            <div class="kpi-value">{len(data)}</div>
+            <div class="kpi-label">Total Members</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown(f"""
+        <div class="kpi-circle orange">
+            <div class="kpi-value">{len(data[data['RiskLevel'] == "High"])}</div>
+            <div class="kpi-label">High Risk Members</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        st.markdown(f"""
+        <div class="kpi-circle green">
+            <div class="kpi-value">{round(data['AvgVisitsPerWeek'].mean(), 2)}</div>
+            <div class="kpi-label">Avg Visits / Week</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        st.markdown(f"""
+        <div class="kpi-circle purple">
+            <div class="kpi-value">{round(data['PaymentRatio'].mean(), 2)}</div>
+            <div class="kpi-label">Avg Payment Ratio</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # --------------------------
     # Member Table
