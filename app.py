@@ -1,12 +1,10 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Upgraded)
+# Gym Owner Dashboard - Streamlit (Pro Upgrade)
 # --------------------------
 
 import pandas as pd
 import numpy as np
 import streamlit as st
-import matplotlib.pyplot as plt
-import seaborn as sns
 import base64
 import plotly.express as px
 
@@ -121,7 +119,6 @@ if members_file and attendance_file:
         'Mobile Number': 'PhoneNumber',
         'Checkin Time': 'CheckinTime'
     }, inplace=True)
-
     attendance['CheckinTime'] = pd.to_datetime(attendance['CheckinTime'], errors='coerce')
 
     attendance_agg = attendance.groupby('PhoneNumber').agg(
@@ -153,51 +150,48 @@ if members_file and attendance_file:
     # Churn + Risk
     # --------------------------
     today = pd.Timestamp.today()
-
     data['Churn'] = np.where(
-        (data['EndDate'] < today) &
-        (data['PlanStatus'].str.lower() != 'active'),
+        (data['EndDate'] < today) & (data['PlanStatus'].str.lower() != 'active'),
         1, 0
     )
-
     data['RiskLevel'] = np.where(
         data['Churn'] == 1, "High",
         np.where(data['AvgVisitsPerWeek'] < 1.5, "Medium", "Low")
     )
 
     # --------------------------
-    # Metrics (VISIBLE & CLEAN)
+    # Sidebar Filters
+    # --------------------------
+    st.sidebar.header("Filters")
+    risk_filter = st.sidebar.multiselect(
+        "Select Risk Level",
+        options=data['RiskLevel'].unique(),
+        default=data['RiskLevel'].unique()
+    )
+    plan_filter = st.sidebar.multiselect(
+        "Select Plan Name",
+        options=data['PlanName'].unique(),
+        default=data['PlanName'].unique()
+    )
+
+    filtered_data = data[(data['RiskLevel'].isin(risk_filter)) & (data['PlanName'].isin(plan_filter))]
+
+    # --------------------------
+    # Metrics
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
-
-    c1.markdown(
-        f'<div class="metric-card"><h1>🏋️ {len(data)}</h1><p>Total Members</p></div>',
-        unsafe_allow_html=True
-    )
-
-    c2.markdown(
-        f'<div class="metric-card"><h1>⚠️ {len(data[data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>',
-        unsafe_allow_html=True
-    )
-
-    c3.markdown(
-        f'<div class="metric-card"><h1>📊 {round(data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>',
-        unsafe_allow_html=True
-    )
-
-    c4.markdown(
-        f'<div class="metric-card"><h1>💰 {round(data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>',
-        unsafe_allow_html=True
-    )
+    c1.markdown(f'<div class="metric-card"><h1>🏋️ {len(filtered_data)}</h1><p>Total Members</p></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="metric-card"><h1>⚠️ {len(filtered_data[filtered_data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="metric-card"><h1>📊 {round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="metric-card"><h1>💰 {round(filtered_data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
     # --------------------------
-    # Table with Conditional Formatting
+    # Table
     # --------------------------
     st.subheader("Member Overview")
     def highlight_risk(row):
-        color = ''
         if row['RiskLevel'] == 'High':
             color = 'background-color: #FF4C4C; color:white'
         elif row['RiskLevel'] == 'Medium':
@@ -205,76 +199,41 @@ if members_file and attendance_file:
         else:
             color = 'background-color: #32CD32; color:black'
         return [color]*len(row)
-
+    
     st.dataframe(
-        data[['PhoneNumber','PlanName','TotalVisits','AvgVisitsPerWeek','PaymentRatio','Churn','RiskLevel']]
+        filtered_data[['PhoneNumber','PlanName','TotalVisits','AvgVisitsPerWeek','PaymentRatio','Churn','RiskLevel']]
         .style.apply(highlight_risk, axis=1)
     )
 
     # --------------------------
-    # Interactive Plotly Charts
+    # Interactive Charts
     # --------------------------
-
-    # Risk Level Distribution
+    # Risk Distribution
     st.subheader("Risk Level Distribution")
-    risk_counts = data['RiskLevel'].value_counts().reset_index()
+    risk_counts = filtered_data['RiskLevel'].value_counts().reset_index()
     risk_counts.columns = ['RiskLevel', 'Count']
     fig_risk = px.bar(
-        risk_counts,
-        x='RiskLevel',
-        y='Count',
-        color='RiskLevel',
+        risk_counts, x='RiskLevel', y='Count', color='RiskLevel',
         color_discrete_map={'High':'#FF4C4C','Medium':'#FFA500','Low':'#32CD32'},
-        text='Count',
-        title="Risk Distribution",
-        template="plotly_dark"
+        text='Count', title="Risk Distribution", template="plotly_dark"
     )
-    fig_risk.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        xaxis_title="",
-        yaxis_title="Number of Members",
-        showlegend=False
-    )
+    fig_risk.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title="", yaxis_title="Number of Members", showlegend=False)
     st.plotly_chart(fig_risk, use_container_width=True)
 
-    # Avg Visits per Week Distribution
-    st.subheader("Avg Visits per Week Distribution")
-    fig_visits = px.histogram(
-        data,
-        x='AvgVisitsPerWeek',
-        nbins=15,
-        color_discrete_sequence=['#00f5ff'],
-        title="Avg Visits per Week",
-        template="plotly_dark"
-    )
+    # Avg Visits Distribution
+    st.subheader("Avg Visits per Week")
+    fig_visits = px.histogram(filtered_data, x='AvgVisitsPerWeek', nbins=15, color_discrete_sequence=['#00f5ff'], template="plotly_dark")
     st.plotly_chart(fig_visits, use_container_width=True)
 
     # Payment Ratio Distribution
-    st.subheader("Payment Ratio Distribution")
-    fig_payment = px.histogram(
-        data,
-        x='PaymentRatio',
-        nbins=10,
-        color_discrete_sequence=['#ff00f5'],
-        title="Payment Ratio",
-        template="plotly_dark"
-    )
+    st.subheader("Payment Ratio")
+    fig_payment = px.histogram(filtered_data, x='PaymentRatio', nbins=10, color_discrete_sequence=['#ff00f5'], template="plotly_dark")
     st.plotly_chart(fig_payment, use_container_width=True)
 
     # Churn by Plan
     st.subheader("Churn by Plan")
-    churn_plan = data.groupby('PlanName')['Churn'].sum().reset_index()
-    fig_churn = px.bar(
-        churn_plan,
-        x='PlanName',
-        y='Churn',
-        color='Churn',
-        text='Churn',
-        color_continuous_scale='Reds',
-        title="Churn by Plan",
-        template="plotly_dark"
-    )
+    churn_plan = filtered_data.groupby('PlanName')['Churn'].sum().reset_index()
+    fig_churn = px.bar(churn_plan, x='PlanName', y='Churn', color='Churn', text='Churn', color_continuous_scale='Reds', template="plotly_dark")
     st.plotly_chart(fig_churn, use_container_width=True)
 
 else:
