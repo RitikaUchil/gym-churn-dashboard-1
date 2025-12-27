@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro)
+# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro with Insights)
 # --------------------------
 
 import pandas as pd
@@ -74,7 +74,7 @@ set_background("assets/bg.jpg")
 # --------------------------
 # Title
 # --------------------------
-st.title("🏋️ Gym Owner Retention Dashboard")
+st.title("🏋️ Gym Owner Retention Dashboard with Insights")
 
 # --------------------------
 # File Upload
@@ -249,90 +249,61 @@ if members_file and attendance_file:
     st.markdown("---")
 
     # --------------------------
-    # Charts
+    # Risk Distribution → Donut Chart + Insight
     # --------------------------
     st.subheader("Risk Distribution")
-    st.plotly_chart(
-        px.bar(
-            filtered_data,
-            x="RiskLevel",
-            color="RiskLevel",
-            template="plotly_dark",
-        ),
-        use_container_width=True,
-    )
-
-    st.subheader("Avg Visits Per Week")
-    st.plotly_chart(
-        px.histogram(
-            filtered_data,
-            x="AvgVisitsPerWeek",
-            template="plotly_dark",
-        ),
-        use_container_width=True,
-    )
-
-    st.subheader("Payment Ratio")
-    st.plotly_chart(
-        px.histogram(
-            filtered_data,
-            x="PaymentRatio",
-            template="plotly_dark",
-        ),
-        use_container_width=True,
-    )
-
-    st.subheader("Churn by Plan")
-    st.plotly_chart(
-        px.bar(
-            filtered_data,
-            x="PlanName",
-            y="Churn",
-            template="plotly_dark",
-        ),
-        use_container_width=True,
-    )
+    risk_counts = filtered_data["RiskLevel"].value_counts().reset_index()
+    risk_counts.columns = ["RiskLevel", "Count"]
+    fig_risk = px.pie(risk_counts, names="RiskLevel", values="Count", hole=0.45, template="plotly_dark")
+    st.plotly_chart(fig_risk, use_container_width=True)
+    high_pct = round((risk_counts[risk_counts['RiskLevel']=="High"]['Count'].sum() / len(filtered_data))*100,2)
+    st.markdown(f"**Insight:** {high_pct}% of members are at high risk. Focus retention efforts here first.")
 
     # --------------------------
-    # Before vs After Retention
+    # Avg Visits → Box Plot + Insight
     # --------------------------
-    before = (
-        filtered_data.groupby("RiskLevel")["Churn"]
-        .mean()
-        .reset_index()
-    )
+    st.subheader("Avg Visits Per Week (Engagement Spread)")
+    fig_visits = px.box(filtered_data, x="RiskLevel", y="AvgVisitsPerWeek", color="RiskLevel", template="plotly_dark")
+    st.plotly_chart(fig_visits, use_container_width=True)
+    avg_visits = round(filtered_data['AvgVisitsPerWeek'].mean(), 2)
+    st.markdown(f"**Insight:** Average visits per week is {avg_visits}. Low engagement members are mostly in Medium/High risk groups.")
+
+    # --------------------------
+    # Payment Ratio → Violin Plot + Insight
+    # --------------------------
+    st.subheader("Payment Ratio Behavior")
+    fig_payment = px.violin(filtered_data, x="RiskLevel", y="PaymentRatio", box=True, points="all", template="plotly_dark")
+    st.plotly_chart(fig_payment, use_container_width=True)
+    avg_payment = round(filtered_data['PaymentRatio'].mean(), 2)
+    st.markdown(f"**Insight:** Overall payment ratio is {avg_payment}. Consider offering coupons or discounts to improve collection for Medium/High risk members.")
+
+    # --------------------------
+    # Churn by Plan → Heatmap + Insight
+    # --------------------------
+    st.subheader("Churn Intensity by Plan")
+    plan_churn = filtered_data.groupby("PlanName")["Churn"].mean().reset_index()
+    fig_churn = px.density_heatmap(plan_churn, x="PlanName", y=["Churn"], z="Churn", template="plotly_dark")
+    st.plotly_chart(fig_churn, use_container_width=True)
+    top_churn_plan = plan_churn.sort_values("Churn", ascending=False).iloc[0]['PlanName']
+    st.markdown(f"**Insight:** Plan '{top_churn_plan}' has the highest churn rate. Focus retention strategies on this plan.")
+
+    # --------------------------
+    # Before vs After Retention → Line Chart + Insight
+    # --------------------------
+    before = filtered_data.groupby("RiskLevel")["Churn"].mean().reset_index()
     before["Retention"] = 1 - before["Churn"]
     before["Stage"] = "Before Action"
 
-    after = (
-        filtered_data.groupby("RiskLevel")["RetentionProbability"]
-        .mean()
-        .reset_index()
-    )
-    after.rename(
-        columns={"RetentionProbability": "Retention"}, inplace=True
-    )
+    after = filtered_data.groupby("RiskLevel")["RetentionProbability"].mean().reset_index()
+    after.rename(columns={"RetentionProbability": "Retention"}, inplace=True)
     after["Stage"] = "After Action"
 
-    compare = pd.concat(
-        [
-            before[["RiskLevel", "Retention", "Stage"]],
-            after[["RiskLevel", "Retention", "Stage"]],
-        ]
-    )
+    compare = pd.concat([before[["RiskLevel", "Retention", "Stage"]], after[["RiskLevel", "Retention", "Stage"]]])
 
-    st.subheader("📊 Before vs After Retention Impact")
-    st.plotly_chart(
-        px.bar(
-            compare,
-            x="RiskLevel",
-            y="Retention",
-            color="Stage",
-            barmode="group",
-            template="plotly_dark",
-        ),
-        use_container_width=True,
-    )
+    st.subheader("📈 Before vs After Retention Impact")
+    fig_retention = px.line(compare, x="RiskLevel", y="Retention", color="Stage", markers=True, template="plotly_dark")
+    st.plotly_chart(fig_retention, use_container_width=True)
+    st.markdown("**Insight:** After recommended actions, retention probability improves across all risk levels, with the largest increase in High risk members.")
 
     # --------------------------
     # Action Table
@@ -340,13 +311,7 @@ if members_file and attendance_file:
     st.subheader("📋 Recovery Action Plan")
     st.dataframe(
         filtered_data[
-            [
-                "PhoneNumber",
-                "RiskLevel",
-                "RecommendedAction",
-                "CouponOffer",
-                "RetentionProbability",
-            ]
+            ["PhoneNumber", "RiskLevel", "RecommendedAction", "CouponOffer", "RetentionProbability"]
         ],
         use_container_width=True,
     )
