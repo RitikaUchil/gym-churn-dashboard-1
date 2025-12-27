@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Pro Upgrade - Fully Interactive)
+# Gym Owner Dashboard - Streamlit (Pro Upgrade with Alerts)
 # --------------------------
 
 import pandas as pd
@@ -178,11 +178,17 @@ if members_file and attendance_file:
     # --------------------------
     # Metrics
     # --------------------------
-    c1, c2, c3, c4 = st.columns(4)
+    # Add two extra metrics: Membership Expiry & Payment Defaulters
+    expiring = filtered_data[(filtered_data['EndDate'] - today).dt.days <= 7]
+    defaulters = filtered_data[filtered_data['PaymentRatio'] < 0.5]
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.markdown(f'<div class="metric-card"><h1>🏋️ {len(filtered_data)}</h1><p>Total Members</p></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="metric-card"><h1>⚠️ {len(filtered_data[filtered_data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="metric-card"><h1>📊 {round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="metric-card"><h1>💰 {round(filtered_data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>', unsafe_allow_html=True)
+    c5.markdown(f'<div class="metric-card"><h1>⏳ {len(expiring)}</h1><p>Expiring Soon</p></div>', unsafe_allow_html=True)
+    c6.markdown(f'<div class="metric-card"><h1>💸 {len(defaulters)}</h1><p>Defaulters</p></div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -190,7 +196,6 @@ if members_file and attendance_file:
     # Table
     # --------------------------
     st.subheader("Member Overview")
-
     def highlight_risk(row):
         if row['RiskLevel'] == 'High':
             color = 'background-color: #FF4C4C; color:white'
@@ -199,7 +204,7 @@ if members_file and attendance_file:
         else:
             color = 'background-color: #32CD32; color:black'
         return [color]*len(row)
-
+    
     st.dataframe(
         filtered_data[['PhoneNumber','PlanName','TotalVisits','AvgVisitsPerWeek','PaymentRatio','Churn','RiskLevel']]
         .style.apply(highlight_risk, axis=1)
@@ -208,7 +213,6 @@ if members_file and attendance_file:
     # --------------------------
     # Interactive Charts
     # --------------------------
-
     # Risk Distribution
     st.subheader("Risk Level Distribution")
     risk_counts = filtered_data['RiskLevel'].value_counts().reset_index()
@@ -218,8 +222,7 @@ if members_file and attendance_file:
         color_discrete_map={'High':'#FF4C4C','Medium':'#FFA500','Low':'#32CD32'},
         text='Count', title="Risk Distribution", template="plotly_dark"
     )
-    fig_risk.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                           xaxis_title="", yaxis_title="Number of Members", showlegend=False)
+    fig_risk.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title="", yaxis_title="Number of Members", showlegend=False)
     st.plotly_chart(fig_risk, use_container_width=True)
 
     # Avg Visits Distribution
@@ -235,8 +238,7 @@ if members_file and attendance_file:
     # Churn by Plan
     st.subheader("Churn by Plan")
     churn_plan = filtered_data.groupby('PlanName')['Churn'].sum().reset_index()
-    fig_churn = px.bar(churn_plan, x='PlanName', y='Churn', color='Churn', text='Churn',
-                       color_continuous_scale='Reds', template="plotly_dark")
+    fig_churn = px.bar(churn_plan, x='PlanName', y='Churn', color='Churn', text='Churn', color_continuous_scale='Reds', template="plotly_dark")
     st.plotly_chart(fig_churn, use_container_width=True)
 
 else:
