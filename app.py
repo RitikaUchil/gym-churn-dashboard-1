@@ -180,10 +180,50 @@ if members_file and attendance_file:
     # Metrics
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f'<div class="metric-card"><h1>🏋️ {len(filtered_data)}</h1><p>Total Members</p></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="metric-card"><h1>⚠️ {len(filtered_data[filtered_data["RiskLevel"]=="High"])}</h1><p>High Risk Members</p></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="metric-card"><h1>📊 {round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1><p>Avg Visits / Week</p></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="metric-card"><h1>💰 {round(filtered_data["PaymentRatio"].mean(),2)}</h1><p>Avg Payment Ratio</p></div>', unsafe_allow_html=True)
+
+    # Total Members - gradient style
+    c1.markdown(f'''
+    <div class="metric-card">
+        <h1>🏋️ {len(filtered_data)}</h1>
+        <p>Total Members</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # High Risk Members - red background + glowing number
+    c2.markdown(f'''
+    <div class="metric-card" style="background: #FF0000;">
+        <h1 style="
+            animation: glow 1.5s ease-in-out infinite alternate;
+            text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff, 0 0 30px #FF0000, 0 0 40px #FF0000;
+        ">
+            ⚠️ {len(filtered_data[filtered_data["RiskLevel"]=="High"])}
+        </h1>
+        <p>High Risk Members</p>
+    </div>
+
+    <style>
+    @keyframes glow {{
+        from {{ text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px #FF0000, 0 0 20px #FF0000; }}
+        to   {{ text-shadow: 0 0 15px #ffffff, 0 0 25px #ffffff, 0 0 35px #FF0000, 0 0 45px #FF0000; }}
+    }}
+    </style>
+    ''', unsafe_allow_html=True)
+
+    # Avg Visits / Week - gradient style
+    c3.markdown(f'''
+    <div class="metric-card">
+        <h1>📊 {round(filtered_data["AvgVisitsPerWeek"].mean(),2)}</h1>
+        <p>Avg Visits / Week</p>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Avg Payment Ratio - gradient style
+    c4.markdown(f'''
+    <div class="metric-card">
+        <h1>💰 {round(filtered_data["PaymentRatio"].mean(),2)}</h1>
+        <p>Avg Payment Ratio</p>
+    </div>
+    ''', unsafe_allow_html=True)
 
     st.markdown("---")
 
