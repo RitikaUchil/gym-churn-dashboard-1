@@ -28,7 +28,7 @@ A **Streamlit-based dashboard** for gym owners to track member engagement, predi
 
 ## 🔹 Screenshots
 
-![Dashboard Screenshot](assets/screenshot.png)
+![Dashboard Screenshot](.devcontainer/1.jpg)
 
 ---
 
