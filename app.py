@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro with Insights)
+# Gym Owner Dashboard - Streamlit (Retention Intelligence Pro with Insights & Excel Export)
 # --------------------------
 
 import pandas as pd
@@ -7,6 +7,7 @@ import numpy as np
 import streamlit as st
 import base64
 import plotly.express as px
+import io
 
 # --------------------------
 # Page Config
@@ -93,6 +94,7 @@ if members_file and attendance_file:
     members.rename(
         columns={
             "Number": "PhoneNumber",
+            "Name": "Name",
             "Start Date": "StartDate",
             "End Date": "EndDate",
             "Plan Name": "PlanName",
@@ -102,6 +104,9 @@ if members_file and attendance_file:
         },
         inplace=True,
     )
+
+    if "Name" not in members.columns:
+        members["Name"] = "N/A"
 
     members["StartDate"] = pd.to_datetime(members["StartDate"], errors="coerce")
     members["EndDate"] = pd.to_datetime(members["EndDate"], errors="coerce")
@@ -249,47 +254,47 @@ if members_file and attendance_file:
     st.markdown("---")
 
     # --------------------------
-    # Risk Distribution → Donut Chart + Insight
+    # Charts with Insights
     # --------------------------
     st.subheader("Risk Distribution")
     risk_counts = filtered_data["RiskLevel"].value_counts().reset_index()
     risk_counts.columns = ["RiskLevel", "Count"]
-    fig_risk = px.pie(risk_counts, names="RiskLevel", values="Count", hole=0.45, template="plotly_dark")
+    fig_risk = px.pie(
+        risk_counts, names="RiskLevel", values="Count", hole=0.45, template="plotly_dark"
+    )
     st.plotly_chart(fig_risk, use_container_width=True)
-    high_pct = round((risk_counts[risk_counts['RiskLevel']=="High"]['Count'].sum() / len(filtered_data))*100,2)
+    high_pct = round(
+        (risk_counts[risk_counts["RiskLevel"] == "High"]["Count"].sum() / len(filtered_data)) * 100,
+        2,
+    )
     st.markdown(f"**Insight:** {high_pct}% of members are at high risk. Focus retention efforts here first.")
 
-    # --------------------------
-    # Avg Visits → Box Plot + Insight
-    # --------------------------
     st.subheader("Avg Visits Per Week (Engagement Spread)")
-    fig_visits = px.box(filtered_data, x="RiskLevel", y="AvgVisitsPerWeek", color="RiskLevel", template="plotly_dark")
+    fig_visits = px.box(
+        filtered_data, x="RiskLevel", y="AvgVisitsPerWeek", color="RiskLevel", template="plotly_dark"
+    )
     st.plotly_chart(fig_visits, use_container_width=True)
-    avg_visits = round(filtered_data['AvgVisitsPerWeek'].mean(), 2)
+    avg_visits = round(filtered_data["AvgVisitsPerWeek"].mean(), 2)
     st.markdown(f"**Insight:** Average visits per week is {avg_visits}. Low engagement members are mostly in Medium/High risk groups.")
 
-    # --------------------------
-    # Payment Ratio → Violin Plot + Insight
-    # --------------------------
     st.subheader("Payment Ratio Behavior")
-    fig_payment = px.violin(filtered_data, x="RiskLevel", y="PaymentRatio", box=True, points="all", template="plotly_dark")
+    fig_payment = px.violin(
+        filtered_data, x="RiskLevel", y="PaymentRatio", box=True, points="all", template="plotly_dark"
+    )
     st.plotly_chart(fig_payment, use_container_width=True)
-    avg_payment = round(filtered_data['PaymentRatio'].mean(), 2)
+    avg_payment = round(filtered_data["PaymentRatio"].mean(), 2)
     st.markdown(f"**Insight:** Overall payment ratio is {avg_payment}. Consider offering coupons or discounts to improve collection for Medium/High risk members.")
 
-    # --------------------------
-    # Churn by Plan → Heatmap + Insight
-    # --------------------------
     st.subheader("Churn Intensity by Plan")
     plan_churn = filtered_data.groupby("PlanName")["Churn"].mean().reset_index()
-    fig_churn = px.density_heatmap(plan_churn, x="PlanName", y=["Churn"], z="Churn", template="plotly_dark")
+    fig_churn = px.density_heatmap(
+        plan_churn, x="PlanName", y=["Churn"], z="Churn", template="plotly_dark"
+    )
     st.plotly_chart(fig_churn, use_container_width=True)
-    top_churn_plan = plan_churn.sort_values("Churn", ascending=False).iloc[0]['PlanName']
+    top_churn_plan = plan_churn.sort_values("Churn", ascending=False).iloc[0]["PlanName"]
     st.markdown(f"**Insight:** Plan '{top_churn_plan}' has the highest churn rate. Focus retention strategies on this plan.")
 
-    # --------------------------
-    # Before vs After Retention → Line Chart + Insight
-    # --------------------------
+    st.subheader("📈 Before vs After Retention Impact")
     before = filtered_data.groupby("RiskLevel")["Churn"].mean().reset_index()
     before["Retention"] = 1 - before["Churn"]
     before["Stage"] = "Before Action"
@@ -299,21 +304,35 @@ if members_file and attendance_file:
     after["Stage"] = "After Action"
 
     compare = pd.concat([before[["RiskLevel", "Retention", "Stage"]], after[["RiskLevel", "Retention", "Stage"]]])
-
-    st.subheader("📈 Before vs After Retention Impact")
     fig_retention = px.line(compare, x="RiskLevel", y="Retention", color="Stage", markers=True, template="plotly_dark")
     st.plotly_chart(fig_retention, use_container_width=True)
     st.markdown("**Insight:** After recommended actions, retention probability improves across all risk levels, with the largest increase in High risk members.")
 
     # --------------------------
-    # Action Table
+    # Action Table + Excel Export
     # --------------------------
     st.subheader("📋 Recovery Action Plan")
+    export_columns = [
+        "Name", "PhoneNumber", "RiskLevel", "RecommendedAction", "CouponOffer",
+        "RetentionProbability", "AvgVisitsPerWeek", "PaymentRatio"
+    ]
+
+    filtered_data["Name"] = filtered_data.get("Name", "N/A")
+
     st.dataframe(
-        filtered_data[
-            ["PhoneNumber", "RiskLevel", "RecommendedAction", "CouponOffer", "RetentionProbability"]
-        ],
+        filtered_data[export_columns],
         use_container_width=True,
+    )
+
+    excel_buffer = io.BytesIO()
+    filtered_data[export_columns].to_excel(excel_buffer, index=False, sheet_name="RecoveryPlan")
+    excel_buffer.seek(0)
+
+    st.download_button(
+        label="📥 Download Recovery Plan Excel",
+        data=excel_buffer,
+        file_name="gym_recovery_plan.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 else:
