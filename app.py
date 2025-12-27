@@ -28,34 +28,26 @@ def set_background(image_path):
         background-image: url("data:image/jpg;base64,{encoded}");
         background-size: cover;
     }}
-
     .block-container {{
         background: linear-gradient(to bottom right, rgba(0,0,0,0.55), rgba(0,0,0,0.75));
         backdrop-filter: blur(12px);
         padding: 2rem;
         border-radius: 18px;
     }}
-
     .metric-card {{
         background: rgba(0,0,0,0.85);
         padding: 18px;
         border-radius: 14px;
         text-align: center;
         box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-        transition: transform 0.2s;
     }}
-
-    .metric-card:hover {{
-        transform: scale(1.05);
-    }}
-
     .metric-card h1 {{
         background: linear-gradient(to right, #00f5ff, #ff00f5);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-size: 36px;
+        margin-bottom: 0;
     }}
-
     .metric-card p {{
         color: white;
         font-size: 16px;
@@ -71,7 +63,7 @@ set_background("assets/bg.jpg")
 st.title("🏋️ Gym Owner Retention Dashboard")
 
 # --------------------------
-# Upload Files
+# File Upload
 # --------------------------
 members_file = st.file_uploader("Upload Members Excel", type=["xlsx"])
 attendance_file = st.file_uploader("Upload Attendance Excel", type=["xlsx"])
@@ -108,8 +100,11 @@ if members_file and attendance_file:
 
     attendance['CheckinTime'] = pd.to_datetime(attendance['CheckinTime'], errors='coerce')
 
-    visits = attendance.groupby('PhoneNumber').size().reset_index(name="TotalVisits")
-    data = members.merge(visits, on='PhoneNumber', how='left').fillna(0)
+    attendance_agg = attendance.groupby('PhoneNumber').agg(
+        TotalVisits=('CheckinTime', 'count')
+    ).reset_index()
+
+    data = members.merge(attendance_agg, on='PhoneNumber', how='left').fillna(0)
 
     data['MembershipWeeks'] = ((pd.Timestamp.today() - data['StartDate']).dt.days / 7).clip(lower=1)
     data['AvgVisitsPerWeek'] = data['TotalVisits'] / data['MembershipWeeks']
@@ -118,8 +113,10 @@ if members_file and attendance_file:
     # Churn + Risk
     # --------------------------
     today = pd.Timestamp.today()
+
     data['Churn'] = np.where(
-        (data['EndDate'] < today) & (data['PlanStatus'].str.lower() != 'active'), 1, 0
+        (data['EndDate'] < today) & (data['PlanStatus'].str.lower() != 'active'),
+        1, 0
     )
 
     data['RiskLevel'] = np.where(
@@ -130,101 +127,113 @@ if members_file and attendance_file:
     # --------------------------
     # Remedies + Coupons
     # --------------------------
-    data['RecommendedAction'] = data['RiskLevel'].map({
-        "High": "Personal call + Free PT",
-        "Medium": "WhatsApp reminder + Free class",
-        "Low": "Maintain engagement"
-    })
+    def action(r):
+        return "Personal call + Free PT" if r=="High" else \
+               "WhatsApp reminder + Free class" if r=="Medium" else \
+               "Maintain engagement"
 
-    data['CouponOffer'] = data['RiskLevel'].map({
-        "High": "20% Renewal Discount",
-        "Medium": "10% Discount",
-        "Low": "Referral Coupon"
-    })
+    def coupon(r):
+        return "20% Renewal Discount" if r=="High" else \
+               "10% Discount" if r=="Medium" else \
+               "Referral Coupon"
 
-    data['RetentionProbability'] = data['RiskLevel'].map({
-        "High": 0.30,
-        "Medium": 0.55,
-        "Low": 0.85
-    })
+    def retention_prob(r):
+        return 0.30 if r=="High" else 0.55 if r=="Medium" else 0.85
+
+    data['RecommendedAction'] = data['RiskLevel'].apply(action)
+    data['CouponOffer'] = data['RiskLevel'].apply(coupon)
+    data['RetentionProbability'] = data['RiskLevel'].apply(retention_prob)
 
     # --------------------------
     # Filters
     # --------------------------
     st.sidebar.header("Filters")
     risk_filter = st.sidebar.multiselect(
-        "Risk Level",
-        data['RiskLevel'].unique(),
+        "Risk Level", data['RiskLevel'].unique(),
         default=data['RiskLevel'].unique()
     )
 
     filtered_data = data[data['RiskLevel'].isin(risk_filter)]
 
     # --------------------------
-    # Gradient Metrics
+    # Metrics
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.markdown(f"""<div class="metric-card"><h1>{len(filtered_data)}</h1><p>Total Members</p></div>""",
-                unsafe_allow_html=True)
-    c2.markdown(f"""<div class="metric-card"><h1>{len(filtered_data[filtered_data['RiskLevel']=="High"])}</h1><p>High Risk</p></div>""",
-                unsafe_allow_html=True)
-    c3.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['AvgVisitsPerWeek'].mean(),2)}</h1><p>Avg Visits / Week</p></div>""",
-                unsafe_allow_html=True)
-    c4.markdown(f"""<div class="metric-card"><h1>{round(filtered_data['PaymentRatio'].mean(),2)}</h1><p>Payment Ratio</p></div>""",
-                unsafe_allow_html=True)
+    c1.markdown(f"<div class='metric-card'><h1>{len(filtered_data)}</h1><p>Total Members</p></div>", unsafe_allow_html=True)
+    c2.markdown(f"<div class='metric-card'><h1>{len(filtered_data[filtered_data.RiskLevel=='High'])}</h1><p>High Risk</p></div>", unsafe_allow_html=True)
+    c3.markdown(f"<div class='metric-card'><h1>{round(filtered_data.AvgVisitsPerWeek.mean(),2)}</h1><p>Avg Visits / Week</p></div>", unsafe_allow_html=True)
+    c4.markdown(f"<div class='metric-card'><h1>{round(filtered_data.PaymentRatio.mean(),2)}</h1><p>Payment Ratio</p></div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # ==========================
-    # 📊 CLEAN & EASY PYPLOT GRAPHS
-    # ==========================
-
-    # Risk Distribution (Donut)
+    # --------------------------
+    # 1️⃣ Risk Distribution (DONUT PIE)
+    # --------------------------
     st.subheader("Risk Distribution")
+
+    risk_counts = filtered_data['RiskLevel'].value_counts()
+
     fig, ax = plt.subplots()
-    counts = filtered_data['RiskLevel'].value_counts()
-    ax.pie(counts, labels=counts.index, autopct='%1.0f%%', startangle=90,
-           wedgeprops={'width': 0.45})
-    ax.axis('equal')
+    ax.pie(
+        risk_counts,
+        labels=risk_counts.index,
+        autopct='%1.0f%%',
+        startangle=90,
+        wedgeprops=dict(width=0.4)
+    )
+    ax.set_title("Member Risk Share")
     st.pyplot(fig)
 
-    # Avg Visits (Box Plot)
-    st.subheader("Engagement Distribution")
+    # --------------------------
+    # 2️⃣ Avg Visits (BOXPLOT)
+    # --------------------------
+    st.subheader("Engagement Spread (Avg Visits / Week)")
+
     fig, ax = plt.subplots()
     filtered_data.boxplot(column='AvgVisitsPerWeek', by='RiskLevel', ax=ax)
-    ax.set_title("Avg Visits per Week by Risk Level")
+    ax.set_title("")
     ax.set_ylabel("Visits / Week")
-    plt.suptitle("")
     st.pyplot(fig)
 
-    # Payment Ratio (Violin)
-    st.subheader("Payment Behavior")
+    # --------------------------
+    # 3️⃣ Payment Health (HORIZONTAL BAR)
+    # --------------------------
+    st.subheader("Payment Ratio by Risk")
+
+    pay = filtered_data.groupby('RiskLevel')['PaymentRatio'].mean()
+
     fig, ax = plt.subplots()
-    groups = [filtered_data[filtered_data['RiskLevel']==r]['PaymentRatio'] for r in ['High','Medium','Low']]
-    ax.violinplot(groups, showmeans=True)
-    ax.set_xticks([1,2,3])
-    ax.set_xticklabels(['High','Medium','Low'])
-    ax.set_ylabel("Payment Ratio")
+    pay.plot(kind='barh', ax=ax)
+    ax.set_xlabel("Payment Ratio")
     st.pyplot(fig)
 
-    # Before vs After Retention (Line)
-    st.subheader("📈 Retention Improvement")
+    # --------------------------
+    # 4️⃣ Before vs After Retention (LINE)
+    # --------------------------
+    st.subheader("📈 Retention Improvement Impact")
+
     before = filtered_data.groupby('RiskLevel')['Churn'].mean()
-    after = filtered_data.groupby('RiskLevel')['RetentionProbability'].mean()
+    before_ret = 1 - before
+
+    after_ret = filtered_data.groupby('RiskLevel')['RetentionProbability'].mean()
 
     fig, ax = plt.subplots()
-    ax.plot(before.index, 1-before, marker='o', label="Before")
-    ax.plot(after.index, after, marker='o', label="After")
+    ax.plot(before_ret.index, before_ret.values, marker='o', linewidth=3, label='Before')
+    ax.plot(after_ret.index, after_ret.values, marker='o', linewidth=3, label='After')
+
+    ax.set_ylim(0, 1)
     ax.set_ylabel("Retention Rate")
     ax.legend()
     ax.grid(alpha=0.3)
+
     st.pyplot(fig)
 
     # --------------------------
     # Action Table
     # --------------------------
     st.subheader("📋 Recovery Action Plan")
+
     st.dataframe(
         filtered_data[['PhoneNumber','RiskLevel',
                        'RecommendedAction','CouponOffer',
