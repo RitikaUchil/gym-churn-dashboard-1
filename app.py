@@ -1,5 +1,5 @@
 # --------------------------
-# Gym Owner Dashboard - Streamlit (Pro Upgrade)
+# Gym Owner Dashboard - Streamlit (Pro Upgrade - Fully Interactive)
 # --------------------------
 
 import pandas as pd
@@ -34,7 +34,6 @@ def set_background(image_path):
         }}
 
         .block-container {{
-            background: rgba(0,0,0,0.5);
             background: linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.7));
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -138,7 +137,7 @@ if members_file and attendance_file:
     attendance_agg['AvgVisitsPerWeek'] = attendance_agg['TotalVisits'] / attendance_agg['MembershipWeeks']
 
     # --------------------------
-    # Merge
+    # Merge Data
     # --------------------------
     data = members.merge(
         attendance_agg[['PhoneNumber', 'TotalVisits', 'AvgVisitsPerWeek']],
@@ -191,6 +190,7 @@ if members_file and attendance_file:
     # Table
     # --------------------------
     st.subheader("Member Overview")
+
     def highlight_risk(row):
         if row['RiskLevel'] == 'High':
             color = 'background-color: #FF4C4C; color:white'
@@ -199,7 +199,7 @@ if members_file and attendance_file:
         else:
             color = 'background-color: #32CD32; color:black'
         return [color]*len(row)
-    
+
     st.dataframe(
         filtered_data[['PhoneNumber','PlanName','TotalVisits','AvgVisitsPerWeek','PaymentRatio','Churn','RiskLevel']]
         .style.apply(highlight_risk, axis=1)
@@ -208,6 +208,7 @@ if members_file and attendance_file:
     # --------------------------
     # Interactive Charts
     # --------------------------
+
     # Risk Distribution
     st.subheader("Risk Level Distribution")
     risk_counts = filtered_data['RiskLevel'].value_counts().reset_index()
@@ -217,7 +218,8 @@ if members_file and attendance_file:
         color_discrete_map={'High':'#FF4C4C','Medium':'#FFA500','Low':'#32CD32'},
         text='Count', title="Risk Distribution", template="plotly_dark"
     )
-    fig_risk.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_title="", yaxis_title="Number of Members", showlegend=False)
+    fig_risk.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                           xaxis_title="", yaxis_title="Number of Members", showlegend=False)
     st.plotly_chart(fig_risk, use_container_width=True)
 
     # Avg Visits Distribution
@@ -233,7 +235,8 @@ if members_file and attendance_file:
     # Churn by Plan
     st.subheader("Churn by Plan")
     churn_plan = filtered_data.groupby('PlanName')['Churn'].sum().reset_index()
-    fig_churn = px.bar(churn_plan, x='PlanName', y='Churn', color='Churn', text='Churn', color_continuous_scale='Reds', template="plotly_dark")
+    fig_churn = px.bar(churn_plan, x='PlanName', y='Churn', color='Churn', text='Churn',
+                       color_continuous_scale='Reds', template="plotly_dark")
     st.plotly_chart(fig_churn, use_container_width=True)
 
 else:
