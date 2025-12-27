@@ -1,4 +1,4 @@
-# 🏋️ Gym Owner Retention Dashboard (Pro + ML Insights)
+# 🏋️ Gym Owner Retention Dashboard
 
 A **Streamlit-based dashboard** for gym owners to track member engagement, predict churn using **Machine Learning (Random Forest)**, and plan retention actions. Provides insights, metrics, and Excel export for recovery plans.
 
