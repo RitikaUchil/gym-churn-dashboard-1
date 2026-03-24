@@ -1,44 +1,19 @@
 # --------------------------
-# Gym Owner Dashboard - Improved Version
+# Gym Owner Dashboard - FINAL FIXED VERSION
 # --------------------------
 
 import pandas as pd
 import numpy as np
 import streamlit as st
-import base64
 import plotly.express as px
 import io
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 
-st.set_page_config(page_title="Gym Owner Dashboard", layout="wide")
+st.set_page_config(page_title="Gym Dashboard", layout="wide")
 
-# --------------------------
-# Background UI
-# --------------------------
-def set_background(image_path):
-    try:
-        with open(image_path, "rb") as img:
-            encoded = base64.b64encode(img.read()).decode()
-
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url("data:image/jpg;base64,{encoded}");
-                background-size: cover;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-    except:
-        pass
-
-set_background("assets/bg.jpg")
-
-st.title("🏋️ Gym Owner Retention Dashboard (Improved ML)")
+st.title("🏋️ Gym Retention Dashboard (Final Fixed ML)")
 
 # --------------------------
 # Upload
@@ -79,64 +54,79 @@ if members_file and attendance_file:
 
     attendance["CheckinTime"] = pd.to_datetime(attendance["CheckinTime"])
 
+    # 🔥 IMPORTANT FEATURES
+    today = pd.Timestamp.today()
+
     attendance_agg = attendance.groupby("PhoneNumber").agg(
-        TotalVisits=("CheckinTime", "count")
+        TotalVisits=("CheckinTime", "count"),
+        LastVisit=("CheckinTime", "max")
     ).reset_index()
+
+    attendance_agg["DaysSinceLastVisit"] = (today - attendance_agg["LastVisit"]).dt.days
 
     # --------------------------
     # MERGE
     # --------------------------
-    data = members.merge(attendance_agg, on="PhoneNumber", how="left").fillna(0)
+    data = members.merge(attendance_agg, on="PhoneNumber", how="left")
 
-    data["MembershipWeeks"] = ((pd.Timestamp.today() - data["StartDate"]).dt.days / 7).clip(lower=1)
+    data["TotalVisits"] = data["TotalVisits"].fillna(0)
+    data["DaysSinceLastVisit"] = data["DaysSinceLastVisit"].fillna(999)
+
+    data["MembershipWeeks"] = ((today - data["StartDate"]).dt.days / 7).clip(lower=1)
     data["AvgVisitsPerWeek"] = data["TotalVisits"] / data["MembershipWeeks"]
 
     # --------------------------
-    # ✅ IMPROVED CHURN LOGIC
+    # ✅ SMART CHURN LOGIC (BALANCED)
     # --------------------------
-    def churn_score(row):
-        score = 0
+    def churn_label(row):
+        if row["EndDate"] < today:
+            return 1
+        if row["DaysSinceLastVisit"] > 20:
+            return 1
+        if row["AvgVisitsPerWeek"] < 1:
+            return 1
+        return 0
 
-        if row["EndDate"] < pd.Timestamp.today():
-            score += 1
-        if row["AvgVisitsPerWeek"] < 1.5:
-            score += 1
-        if row["PaymentRatio"] < 0.8:
-            score += 1
-
-        return score
-
-    data["ChurnScore"] = data.apply(churn_score, axis=1)
-    data["Churn"] = np.where(data["ChurnScore"] >= 2, 1, 0)
+    data["Churn"] = data.apply(churn_label, axis=1)
 
     # --------------------------
     # ML MODEL
     # --------------------------
-    features = ["MembershipWeeks", "AvgVisitsPerWeek", "PaymentRatio", "PlanName", "PlanStatus"]
+    features = [
+        "MembershipWeeks",
+        "AvgVisitsPerWeek",
+        "PaymentRatio",
+        "DaysSinceLastVisit",
+        "PlanName",
+        "PlanStatus"
+    ]
 
     X = pd.get_dummies(data[features], drop_first=True)
     y = data["Churn"]
 
+    # ⚠️ Important: balance check
+    if y.nunique() < 2:
+        st.error("⚠️ All data belongs to one class → cannot train ML model")
+        st.stop()
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model = RandomForestClassifier(n_estimators=150, max_depth=5, random_state=42)
     model.fit(X_train, y_train)
 
-    # --------------------------
-    # ✅ FIXED PREDICTION
-    # --------------------------
+    # FIXED prediction alignment
     X_full = pd.get_dummies(data[features], drop_first=True)
     X_full = X_full.reindex(columns=X_train.columns, fill_value=0)
 
     data["ChurnProbability"] = model.predict_proba(X_full)[:, 1]
 
     # --------------------------
-    # RISK LEVEL
+    # ✅ BETTER RISK SEGMENTATION
     # --------------------------
     def risk(p):
-        if p > 0.7:
+        if p > 0.65:
             return "High"
-        elif p > 0.4:
+        elif p > 0.35:
             return "Medium"
         return "Low"
 
@@ -144,33 +134,14 @@ if members_file and attendance_file:
     data["RetentionProbability"] = 1 - data["ChurnProbability"]
 
     # --------------------------
-    # FEATURE IMPORTANCE 🔥
-    # --------------------------
-    st.subheader("🔥 Feature Importance")
-    importance = pd.Series(model.feature_importances_, index=X_train.columns)
-    st.bar_chart(importance.sort_values(ascending=False))
-
-    # --------------------------
-    # FILTER
-    # --------------------------
-    st.sidebar.header("Filters")
-    risk_filter = st.sidebar.multiselect(
-        "Risk Level",
-        data["RiskLevel"].unique(),
-        default=data["RiskLevel"].unique(),
-    )
-
-    filtered_data = data[data["RiskLevel"].isin(risk_filter)]
-
-    # --------------------------
     # METRICS
     # --------------------------
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Total Members", len(filtered_data))
-    c2.metric("High Risk", len(filtered_data[filtered_data["RiskLevel"] == "High"]))
-    c3.metric("Avg Visits/Week", round(filtered_data["AvgVisitsPerWeek"].mean(), 2))
-    c4.metric("Payment Ratio", round(filtered_data["PaymentRatio"].mean(), 2))
+    c1.metric("Total Members", len(data))
+    c2.metric("High Risk", len(data[data["RiskLevel"] == "High"]))
+    c3.metric("Medium Risk", len(data[data["RiskLevel"] == "Medium"]))
+    c4.metric("Low Risk", len(data[data["RiskLevel"] == "Low"]))
 
     st.markdown("---")
 
@@ -178,27 +149,39 @@ if members_file and attendance_file:
     # CHARTS
     # --------------------------
     st.subheader("Risk Distribution")
-    fig = px.pie(filtered_data, names="RiskLevel", hole=0.4)
+    fig = px.pie(data, names="RiskLevel", hole=0.4)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Engagement vs Risk")
-    fig2 = px.box(filtered_data, x="RiskLevel", y="AvgVisitsPerWeek")
+    st.subheader("Days Since Last Visit vs Risk 🔥")
+    fig2 = px.box(data, x="RiskLevel", y="DaysSinceLastVisit")
     st.plotly_chart(fig2, use_container_width=True)
 
+    st.subheader("Visits per Week vs Risk")
+    fig3 = px.box(data, x="RiskLevel", y="AvgVisitsPerWeek")
+    st.plotly_chart(fig3, use_container_width=True)
+
     # --------------------------
-    # ACTION TABLE
+    # ACTION PLAN
     # --------------------------
     def action(row):
         if row["RiskLevel"] == "High":
-            return "Call + Offer Discount"
+            return "🚨 Call + Heavy Discount"
         elif row["RiskLevel"] == "Medium":
-            return "Reminder + Free Session"
-        return "Maintain"
+            return "⚠️ Reminder + Free Session"
+        return "✅ Maintain Engagement"
 
     data["Action"] = data.apply(action, axis=1)
 
     st.subheader("📋 Action Plan")
-    st.dataframe(data[["Name", "PhoneNumber", "RiskLevel", "Action", "RetentionProbability"]])
+    st.dataframe(data[[
+        "Name",
+        "PhoneNumber",
+        "RiskLevel",
+        "DaysSinceLastVisit",
+        "AvgVisitsPerWeek",
+        "Action",
+        "RetentionProbability"
+    ]])
 
     # --------------------------
     # DOWNLOAD
@@ -207,7 +190,7 @@ if members_file and attendance_file:
     data.to_excel(buffer, index=False)
     buffer.seek(0)
 
-    st.download_button("Download Excel", buffer, "output.xlsx")
+    st.download_button("📥 Download Excel", buffer, "gym_output.xlsx")
 
 else:
     st.info("Upload both files")
